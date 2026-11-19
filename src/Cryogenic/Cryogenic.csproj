@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
@@ -7,7 +7,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<EnableNETAnalyzers>true</EnableNETAnalyzers>
 		<AnalysisLevel>latest</AnalysisLevel>
-		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+		<!-- Keep the upstream disassembly formatting; semantic analyzers still run. -->
+		<EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
 		<NoWarn>S1118;S3241;S101;MA0048;S1135;MA0026;S125;S4144;MA0048;MA0049</NoWarn>
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 	</PropertyGroup>
@@ -26,6 +27,8 @@
 
 	<ItemGroup>
 		<PackageReference Include="Spice86" Version="12.0.0" />
+    <ProjectReference Include="../Cryogenic.Player/Cryogenic.Player.csproj" />
+    <ProjectReference Include="../Spice86.Audio/Spice86.Audio.csproj" />
 		<PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.201">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -58,4 +61,8 @@
 		<Using Include="Spice86.Core.Emulator.VM" />
 		<Using Include="Spice86.Shared.Utils" />
 	</ItemGroup>
+  <ItemGroup>
+    <Content Include="../../LICENSE" Link="licenses/Cryogenic/LICENSE" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../NOTICE" Link="licenses/Cryogenic/NOTICE" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

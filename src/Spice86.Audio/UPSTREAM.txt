@@ -1,0 +1,6 @@
+Vendored from https://github.com/OpenRakis/Spice86.Audio
+Commit c791dd6e3c9bdf5dd49086278613673b48b1009b (audio version 11.4.0).
+
+Local changes: the CoreAudio callback thread is the only Mac playback consumer (backport of upstream 56997b10efc4); the callback reads queued data without waiting for future samples; short producer lock contention preserves queued sound; Mac prebuffer defaults to 120 ms. Original public API and assembly version retained.
+
+The original source carries its applicable license notices; full upstream license files are under licenses/.

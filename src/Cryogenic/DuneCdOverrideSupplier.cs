@@ -1,4 +1,4 @@
-﻿namespace Cryogenic;
+namespace Cryogenic;
 
 using Spice86.Core.CLI;
 using Spice86.Core.Emulator.Function;
@@ -37,6 +37,7 @@ public class DuneCdOverrideSupplier : IOverrideSupplier {
 		Machine machine) {
 		Dictionary<SegmentedAddress, FunctionInformation> res = new();
 		CreateOverrides(loggerService, configuration, programStartAddress, machine, res);
+        Cryogenic.Player.PlayerRuntime.Attach(machine);
 		return res;
 	}
 

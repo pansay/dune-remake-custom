@@ -1,9 +1,15 @@
-﻿using Cryogenic;
+using Cryogenic;
+using Cryogenic.Player;
 
 using Spice86.Core.CLI;
 
+if (args.Length == 0 || args.Any(a => string.Equals(a, "--player", StringComparison.Ordinal))) {
+    PlayerApplication.Run(args.Where(a => !string.Equals(a, "--player", StringComparison.Ordinal)).ToArray());
+    return;
+}
+
 // Configure command-line arguments for Spice86 execution
-List<string> newArgs = args.ToList();
+List<string> newArgs = args.Where(a => !string.Equals(a, "--engine", StringComparison.Ordinal)).ToList();
 //newArgs.AddRange("-m /mnt/c/mt32-rom-data -d true -e /mnt/c/Jeux/ABWFR/DUNE_CD/C/DNCDPRG.EXE -a \"MID330 SBP2227\" --UseCodeOverride true".Split(" "));
 
 // Inject the custom interrupt handler segment address into the configuration

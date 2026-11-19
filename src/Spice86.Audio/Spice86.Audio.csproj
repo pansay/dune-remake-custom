@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>11.4.0</Version>
+    <AssemblyVersion>11.4.0.0</AssemblyVersion>
+    <FileVersion>11.4.0.0</FileVersion>
+    <InformationalVersion>11.4.0+cryogenic-mac-audio-fix</InformationalVersion>
+    <PackageId>Spice86.Audio</PackageId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Spice86.Shared" Version="12.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="licenses/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/Spice86.Audio/%(Filename)%(Extension)" />
+    <Content Include="UPSTREAM.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/Spice86.Audio/UPSTREAM.txt" />
+  </ItemGroup>
+</Project>

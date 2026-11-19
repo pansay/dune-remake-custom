@@ -358,3 +358,13 @@ MigrationBackup/
 
 #GDB
 .gdb_history
+# Local player installation, copyrighted CD data, personal saves and preferences
+.local/
+dune/*
+!dune/README.md
+mt32rom/*
+!mt32rom/README.md
+*.SAV
+*.sav
+*.iso
+.DS_Store

@@ -53,3 +53,10 @@
 #*.props     merge=binary
 #*.filters   merge=binary
 #*.vcxitems  merge=binary
+
+# Keep portable launch/build scripts executable after a Git checkout.
+*.sh text eol=lf
+*.command text eol=lf
+
+# Preserve formatting in the vendored upstream audio source.
+src/Spice86.Audio/** -whitespace
