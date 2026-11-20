@@ -23,10 +23,13 @@ public sealed class PlayerRuntime {
     private string? lastCommand;
     private byte[]? capturedSave;
     private int? pendingTextMode;
+    private bool fullVisionMapReveal;
+    private bool mapRevealApplied;
 
     private PlayerRuntime(Machine machine, SessionOptions options) {
         this.machine = machine;
         this.options = options;
+        fullVisionMapReveal = options.FullVisionMapReveal;
     }
 
     public static void Attach(Machine machine) {
@@ -93,6 +96,8 @@ public sealed class PlayerRuntime {
         Hook(0xB28C, () => { lock (gate) pausePage = "save"; });
         Hook(0xB29E, () => { lock (gate) pausePage = "load"; });
         Hook(0xD820, SafeTick);
+        Require(0x5DCE, [0xA0, 0xEB, 0x46]);
+        Hook(0x5DCE, ApplyFullVisionMapReveal);
         Publish("running");
     }
 
@@ -120,6 +125,7 @@ public sealed class PlayerRuntime {
                 ApplyTextMode(mode);
                 pendingTextMode = null;
             }
+            if (!mapRevealApplied) ApplyFullVisionMapReveal();
             if (!ready) {
                 ready = true;
                 Publish("running");
@@ -156,6 +162,8 @@ public sealed class PlayerRuntime {
                                 break;
                             case "resume":
                                 pendingTextMode = command.DialogueTextMode;
+                                fullVisionMapReveal = command.FullVisionMapReveal;
+                                mapRevealApplied = false;
                                 capturedSave = null;
                                 pausePage = null;
                                 machine.PauseHandler.Resume();
@@ -205,6 +213,18 @@ public sealed class PlayerRuntime {
         byte value = (byte)Math.Clamp(mode, 0, 2); // 0 subtitles, 1 balloons, 2 no text.
         machine.Memory[dataBase + 0x28E7] = value;
         machine.Memory[dataBase + 0x28E8] = value;
+    }
+
+    private void ApplyFullVisionMapReveal() {
+        if (!fullVisionMapReveal || (machine.Memory[dataBase + FullVisionMapReveal.PowersOffset] & FullVisionMapReveal.WaterOfLifePower) == 0) return;
+        byte[] state = machine.Memory.ReadRam(DuneSaveCodec.GameStateLength, dataBase);
+        MapRevealResult result = FullVisionMapReveal.Plan(state, enabled: true);
+        foreach (DuneStateChange change in result.Changes) machine.Memory[dataBase + (uint)change.Offset] = change.Value;
+        mapRevealApplied = true;
+        if (result.RevealedLocations == 0) return;
+        // Follow the native map-dirty mechanism so an already open map is redrawn.
+        if ((machine.Memory[dataBase + 0x11C9] & 3) != 0) machine.Memory[dataBase + 0x4728] |= 1;
+        if (machine.Memory[dataBase + 0x46EB] != 0) machine.Memory[dataBase + 0x46EC] = 1;
     }
 
     private void PersistTextMode() {

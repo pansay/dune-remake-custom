@@ -31,7 +31,9 @@ internal static class PlayerDiagnostics {
             RoomY = machine.Memory.UInt16[dataBase + 6],
             Palette = palette,
             PaletteTransition = machine.Memory[dataBase + 0xCE80],
-            WorldView = machine.Memory[dataBase + 0xFB]
+            WorldView = machine.Memory[dataBase + 0xFB],
+            FullVisions = (machine.Memory[dataBase + FullVisionMapReveal.PowersOffset] & FullVisionMapReveal.WaterOfLifePower) != 0,
+            KnownLocations = Enumerable.Range(0, FullVisionMapReveal.LocationCount).Count(i => (machine.Memory[dataBase + (uint)(FullVisionMapReveal.LocationsOffset + i * FullVisionMapReveal.LocationSize + FullVisionMapReveal.LocationFlagsOffset)] & FullVisionMapReveal.Hidden) == 0)
         });
     }
 }

@@ -197,7 +197,7 @@ public sealed class PlayerWindow : Window {
             dataFolder.Text = chosen;
         }));
         panel.Children.Add(dataFolder);
-        panel.Children.Add(Button("Game mods · Planned", () => { ShowGameMods(settingsPage); return Task.CompletedTask; }));
+        panel.Children.Add(Button("Game mods", () => { ShowGameMods(settingsPage); return Task.CompletedTask; }));
         panel.Children.Add(Button("Save settings", () => {
             controller.Settings.DialogueTextMode = balloons.IsChecked == true ? 1 : noSubtitles.IsChecked == true ? 2 : 0;
             controller.Settings.Cycles = (int)(cycles.Value ?? 5500);
@@ -209,14 +209,26 @@ public sealed class PlayerWindow : Window {
     }
 
     private void ShowGameMods(Control settingsPage) {
-        StackPanel panel = Panel("Game mods", "Planned options. Each switch will become available when its mod is implemented.");
+        StackPanel panel = Panel("Game mods", "Optional gameplay changes. Planned mods are grayed out.");
         Scrollable(panel);
+        CheckBox? fullMap = null;
         foreach (GameModIdea idea in GameModIdeas.All) {
             StackPanel description = new() { Spacing = 3 };
-            description.Children.Add(new TextBlock { Text = idea.Name, FontSize = 14, FontWeight = FontWeight.Medium, Foreground = Brush("#929994"), TextWrapping = TextWrapping.Wrap });
-            description.Children.Add(new TextBlock { Text = idea.Description, FontSize = 12, Foreground = Brush("#858B89"), TextWrapping = TextWrapping.Wrap });
-            panel.Children.Add(new CheckBox { Content = description, IsChecked = false, IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
+            description.Children.Add(new TextBlock { Text = idea.Name, FontSize = 14, FontWeight = FontWeight.Medium, Foreground = Brush(idea.Implemented ? "#F3E4CE" : "#929994"), TextWrapping = TextWrapping.Wrap });
+            description.Children.Add(new TextBlock { Text = idea.Description, FontSize = 12, Foreground = Brush(idea.Implemented ? "#ACA99F" : "#858B89"), TextWrapping = TextWrapping.Wrap });
+            CheckBox option = new() { Tag = idea.Id, Content = description, IsChecked = idea.Id == "full-visions-reveal-map" && controller.Settings.FullVisionMapReveal, IsEnabled = idea.Implemented, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+            if (idea.Id == "full-visions-reveal-map") fullMap = option;
+            panel.Children.Add(option);
         }
+        panel.Children.Add(Button("Save mods", () => {
+            PlayerSettings saved = controller.SettingsStore.Load();
+            saved.FullVisionMapReveal = fullMap?.IsChecked == true;
+            controller.SettingsStore.Save(saved);
+            controller.Settings.FullVisionMapReveal = saved.FullVisionMapReveal;
+            page.Content = settingsPage;
+            notice.Text = controller.Running ? "Game mods saved. Reopen the map after resuming." : "Game mods saved.";
+            return Task.CompletedTask;
+        }, primary: true));
         panel.Children.Add(Button("Back to settings", () => { page.Content = settingsPage; return Task.CompletedTask; }));
     }
 

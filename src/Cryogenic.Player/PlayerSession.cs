@@ -1,7 +1,7 @@
 namespace Cryogenic.Player;
 
-public sealed record SessionOptions(string Id, string Mode, bool SubtitleBalloons, int DialogueTextMode = 1);
-public sealed record PlayerCommand(string Id, string Action, int Slot = 0, string? Name = null, bool? SubtitleBalloons = null, int DialogueTextMode = 1);
+public sealed record SessionOptions(string Id, string Mode, bool SubtitleBalloons, int DialogueTextMode = 1, bool FullVisionMapReveal = false);
+public sealed record PlayerCommand(string Id, string Action, int Slot = 0, string? Name = null, bool? SubtitleBalloons = null, int DialogueTextMode = 1, bool FullVisionMapReveal = false);
 public sealed record SessionStatus(string SessionId, string State, bool Ready, string Page = "menu", string? CompletedCommand = null, string? Message = null);
 
 public static class SessionFiles {

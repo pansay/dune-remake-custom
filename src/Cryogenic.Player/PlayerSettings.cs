@@ -9,6 +9,7 @@ public sealed class PlayerSettings {
     public int DialogueTextMode { get; set; } = 1;
     public int Cycles { get; set; } = 5500;
     public string? GameDataDirectory { get; set; }
+    public bool FullVisionMapReveal { get; set; }
 }
 
 public static class PlayerPaths {

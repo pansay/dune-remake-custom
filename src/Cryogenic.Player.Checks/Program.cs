@@ -15,7 +15,7 @@ int checks = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); checks++; }
 void Invalid(Action action, string name) { try { action(); } catch (InvalidDataException) { checks++; return; } throw new Exception(name); }
 
-if (args.Length >= 3 && args[0] == "--integration") {
+if (args.Length >= 3 && args[0] is "--integration" or "--map-mod-integration") {
     Environment.SetEnvironmentVariable("CRYOGENIC_ENGINE_HEADLESS", "1");
     Environment.SetEnvironmentVariable("CRYOGENIC_CAPTURE_FRAMES", "1");
     using PlayerController controller = new(Path.GetFullPath(args[1]));
@@ -31,6 +31,71 @@ if (args.Length >= 3 && args[0] == "--integration") {
             await Task.Delay(50);
         }
         throw new Exception("Timed out: " + description);
+    }
+    if (args[0] == "--map-mod-integration") {
+        int stateOffset = DuneSaveCodec.PayloadLength - DuneSaveCodec.GameStateLength;
+        int sourceSlot = controller.Saves.Read(2) != null ? 2 : 1;
+        var source = DuneSaveCodec.Decode(File.ReadAllBytes(controller.Saves.SavePath(sourceSlot)));
+        byte[] early = source.Payload.ToArray();
+        early[stateOffset + FullVisionMapReveal.PowersOffset] = (byte)((early[stateOffset + FullVisionMapReveal.PowersOffset] | 1) & ~FullVisionMapReveal.WaterOfLifePower);
+        controller.Saves.Write(97, "Test: first visions", DuneSaveCodec.Encode(source.GameTime, early));
+        byte[] full = early.ToArray();
+        full[stateOffset + FullVisionMapReveal.PowersOffset] |= FullVisionMapReveal.WaterOfLifePower;
+        controller.Saves.Write(96, "Test: Water of Life", DuneSaveCodec.Encode(source.GameTime, full));
+        byte[] State(int slot) => DuneSaveCodec.Decode(File.ReadAllBytes(controller.Saves.SavePath(slot))).Payload[stateOffset..];
+        int HiddenLocations(byte[] state) => Enumerable.Range(0, FullVisionMapReveal.LocationCount).Count(i => (state[FullVisionMapReveal.LocationsOffset + i * FullVisionMapReveal.LocationSize + FullVisionMapReveal.LocationFlagsOffset] & FullVisionMapReveal.Hidden) != 0);
+        async Task LoadAndPause(int slot, bool enabled) {
+            controller.Settings.FullVisionMapReveal = enabled;
+            controller.SettingsStore.Save(controller.Settings);
+            await controller.Start("load", slot);
+            await WaitFor(() => controller.Status?.Ready == true, "Mod scenario reaches gameplay");
+            controller.Send("pause", name: "save");
+            await WaitFor(() => controller.Paused, "Mod scenario pauses safely");
+        }
+        await LoadAndPause(97, true);
+        await controller.Save(95, "Test: enabled before full powers");
+        Check(HiddenLocations(State(95)) == HiddenLocations(State(97)), "First visions do not reveal the map");
+        await LoadAndPause(96, false);
+        await controller.Save(94, "Test: full powers, mod off");
+        Check(HiddenLocations(State(94)) == HiddenLocations(State(96)), "Full powers keep vanilla discovery when the mod is off");
+        controller.Settings.FullVisionMapReveal = true;
+        controller.SettingsStore.Save(controller.Settings);
+        controller.Send("resume");
+        await WaitFor(() => controller.Status?.State == "running", "Mod can be enabled in a live game");
+        controller.Send("pause", name: "save");
+        await WaitFor(() => controller.Paused, "Live revealed game can pause");
+        await controller.Save(93, "Test: full map revealed");
+        byte[] before = State(94), revealed = State(93);
+        Check(HiddenLocations(revealed) == 0, "All 70 locations become known after Water of Life");
+        bool preserved = true;
+        for (int i = 0; i < FullVisionMapReveal.LocationCount; i++) {
+            int start = FullVisionMapReveal.LocationsOffset + i * FullVisionMapReveal.LocationSize;
+            for (int n = 0; n < FullVisionMapReveal.LocationSize; n++) {
+                if (n is 10 or 11) continue;
+                if (before[start + n] != revealed[start + n]) preserved = false;
+            }
+            if ((before[start + 10] & 0x7F) != revealed[start + 10]) preserved = false;
+        }
+        Check(preserved, "Reveal preserves coordinates, names, ownership, visits, troops and prospecting");
+        Check(before[0x25] == revealed[0x25] && before[0x2A] == revealed[0x2A], "Reveal does not advance visits or story phase");
+        controller.Settings.FullVisionMapReveal = false;
+        controller.SettingsStore.Save(controller.Settings);
+        controller.Send("resume");
+        await WaitFor(() => controller.Status?.State == "running", "Mod can be turned off");
+        controller.Send("pause", name: "save");
+        await WaitFor(() => controller.Paused, "Game pauses after disabling the mod");
+        await controller.Save(92, "Test: mod disabled after discovery");
+        Check(HiddenLocations(State(92)) == 0, "Turning the mod off preserves discovered locations");
+        await LoadAndPause(93, false);
+        await controller.Save(91, "Test: native save reload");
+        Check(HiddenLocations(State(91)) == 0, "Revealed locations survive native save and reload without the mod");
+        await LoadAndPause(96, true);
+        await controller.Save(90, "Test: full powers on initial load");
+        Check(HiddenLocations(State(90)) == 0, "Enabling the mod also works when loading an existing full-power save");
+        await controller.Stop();
+        Check(!controller.Running, "Map mod test engine exits cleanly");
+        Console.WriteLine($"Passed {checks} full-map game checks. Isolated data: {temporary}");
+        return;
     }
     await controller.Start("new");
     await WaitFor(() => controller.Status?.Ready == true, "New game reaches input loop");
@@ -89,6 +154,35 @@ if (args.Length >= 3 && args[0] == "--integration") {
 }
 
 Random random = new(1992);
+byte[] mapState = new byte[DuneSaveCodec.GameStateLength];
+random.NextBytes(mapState);
+mapState[FullVisionMapReveal.PowersOffset] = 1;
+mapState[FullVisionMapReveal.KnownSietchesOffset] = 4;
+for (int i = 0; i < FullVisionMapReveal.LocationCount; i++) {
+    int start = FullVisionMapReveal.LocationsOffset + i * FullVisionMapReveal.LocationSize;
+    mapState[start + 8] = (byte)((i % 4) switch { 0 => 0x08, 1 => 0x20, 2 => 0x21, _ => 0x28 });
+    mapState[start + 10] = (byte)((mapState[start + 10] & 0x7F) | (i % 3 == 0 ? 0 : 0x80));
+}
+mapState[FullVisionMapReveal.LocationsEnd] = 0xFF;
+mapState[FullVisionMapReveal.LocationsEnd + 1] = 0xFF;
+Check(FullVisionMapReveal.Plan(mapState, enabled: true).Changes.Count == 0, "Map mod waits beyond the first visions");
+mapState[FullVisionMapReveal.PowersOffset] |= FullVisionMapReveal.WaterOfLifePower;
+Check(FullVisionMapReveal.Plan(mapState, enabled: false).Changes.Count == 0, "Disabled mod preserves vanilla discovery even with full powers");
+byte[] originalMapState = mapState.ToArray();
+MapRevealResult revealPlan = FullVisionMapReveal.Plan(mapState, enabled: true);
+foreach (DuneStateChange change in revealPlan.Changes) mapState[change.Offset] = change.Value;
+Check(Enumerable.Range(0, 70).All(i => (mapState[0x100 + i * 28 + 10] & 0x80) == 0), "All original locations can be discovered");
+bool unrelatedStatePreserved = true;
+for (int offset = 0; offset < mapState.Length; offset++) {
+    bool discoveryField = offset >= 0x100 && offset < FullVisionMapReveal.LocationsEnd && (offset - 0x100) % 28 is 10 or 11;
+    if (offset != 0x27 && !discoveryField && mapState[offset] != originalMapState[offset]) unrelatedStatePreserved = false;
+}
+Check(unrelatedStatePreserved, "Discovery changes preserve unrelated native game state");
+Check(Enumerable.Range(0, 70).All(i => (originalMapState[0x100 + i * 28 + 10] & 0x7F) == mapState[0x100 + i * 28 + 10]), "Visit, ownership, military and prospecting flags stay intact");
+Check(mapState[0x27] == originalMapState[0x27] + revealPlan.RevealedSietches, "Known-sietch counter follows native discovery");
+Check(FullVisionMapReveal.Plan(mapState, enabled: true).Changes.Count == 0, "Repeated reveal is idempotent");
+byte[] malformedLocations = mapState.ToArray(); malformedLocations[FullVisionMapReveal.LocationsEnd] = 0;
+Invalid(() => FullVisionMapReveal.Plan(malformedLocations, enabled: true), "An unsupported location table is not modified");
 for (int iteration = 0; iteration < 50; iteration++) {
     byte[] payload = new byte[DuneSaveCodec.PayloadLength];
     if (iteration % 3 == 0) random.NextBytes(payload);
@@ -163,7 +257,18 @@ foreach (string choice in new[] { "Subtitles", "No subtitles", "Balloons" }) {
     Check(window.GetVisualDescendants().OfType<RadioButton>().Single(r => r.IsChecked == true).Content?.ToString() == choice, "Original subtitle choice persists: " + choice);
 }
 Render("settings");
-Find("Game mods · Planned").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Dispatcher.UIThread.RunJobs();
+CheckBox mapOption = window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map"));
+Check(mapOption.IsEnabled && mapOption.IsChecked == false, "Full map reveal is available and off by default");
+mapOption.IsChecked = true;
+Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Dispatcher.UIThread.RunJobs();
+Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map")).IsChecked == true, "Full map reveal preference is remembered");
+window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map")).IsChecked = false;
+Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Render("game-mods");
 Find("Back to settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Find("Back").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

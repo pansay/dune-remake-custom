@@ -18,17 +18,15 @@ Mac keyboards may require Fn together with a function key. The original game's S
 
 Dialogue balloons are enabled by default. Settings offers the original **Subtitles**, **Balloons**, and **No subtitles** radio choices and remembers the text mode and game speed. Changes to subtitles, balloons, or no text made in the original mixer are also remembered. The default speed is **5500 cycles**. The Mac playback buffer defaults to **120 ms**, with the corrected single CoreAudio playback consumer.
 
-## Planned game mods
+## Game mods
 
-Settings → Game mods lists these ideas as disabled, unchecked options until implemented:
+**Full visions reveal the whole map** is available in Settings → Game mods. It is **off by default**. Enable it and choose **Save mods**, then resume, start, or load a game. If the map was already open, close and reopen it to refresh the markers.
 
-- No Chani kidnapping.
-- Once Paul has full visions, reveal all sietches and fortresses across the whole map.
-- Continue playing after conquering the Harkonnen palace.
-- Sardaukar arrive late in the game through surprise attacks.
-- After the Harkonnen defeat, open new territories to conquer, including a Sardaukar palace with the Emperor.
+After Paul successfully drinks the Water of Life, the mod discovers all 70 locations already defined by the original game: sietches, fortresses, smuggler camps and both palaces. An existing save that has reached that point is supported. First visions alone do not activate it.
 
-These are future optional game mods. The current placeholders do not alter gameplay.
+Discovery preserves coordinates, names, ownership, troops, prospecting information, visits and story phase. Places become visible without being marked as visited or conquered. The native known-sietch counter is updated consistently with normal discovery. Revealed places are stored in normal Dune save files; turning the mod off stops future automatic reveals and leaves existing discoveries intact.
+
+The other four ideas remain disabled placeholders: no Chani kidnapping; continued play after the Harkonnen defeat; late Sardaukar surprise attacks; and new territories with a Sardaukar palace and the Emperor after that defeat. Those new territories are not part of the original 70-location map.
 
 ## Original game data and saves
 
@@ -59,6 +57,12 @@ After publishing, the optional end-to-end check launches an isolated headless en
 
 ```sh
 dotnet run --project src/Cryogenic.Player.Checks -c Release -- --integration .local/app/Cryogenic /path/to/original/dune
+```
+
+The optional full-map integration check uses isolated copies of local saves to verify the Water of Life gate, vanilla behaviour with the mod off, live enable/disable, preservation of the other location data, and native save/reload compatibility:
+
+```sh
+dotnet run --project src/Cryogenic.Player.Checks -c Release -- --map-mod-integration .local/app/Cryogenic /path/to/original/dune
 ```
 
 For Windows, publish `src/Cryogenic/Cryogenic.csproj` with `-r win-x64 --self-contained true` and run `Cryogenic.exe --player`. The player code is portable; this fork's end-to-end game and audio validation was performed on Apple Silicon macOS.
