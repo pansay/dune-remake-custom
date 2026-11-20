@@ -26,6 +26,12 @@ if (args.Length >= 3 && args[0] == "--chani-mod-integration") {
     return;
 }
 
+if (args.Length >= 3 && args[0] == "--victory-mod-integration") {
+    await VictoryStoryChecks.Run(args[1], args[2], temporary, Check);
+    Console.WriteLine($"Passed {checks} victory continuation checks. Isolated data: {temporary}");
+    return;
+}
+
 if (args.Length >= 3 && args[0] is "--integration" or "--map-mod-integration") {
     Environment.SetEnvironmentVariable("CRYOGENIC_ENGINE_HEADLESS", "1");
     Environment.SetEnvironmentVariable("CRYOGENIC_CAPTURE_FRAMES", "1");
@@ -165,6 +171,7 @@ if (args.Length >= 3 && args[0] is "--integration" or "--map-mod-integration") {
 }
 
 Random random = new(1992);
+VictoryStoryChecks.CheckPolicy(Check, Invalid);
 Check(NoChaniKidnapping.RedirectPhase(0x60, true) == 0x6C && NoChaniKidnapping.RedirectPhase(0x64, true) == 0x6C && NoChaniKidnapping.RedirectPhase(0x68, true) == 0x6C, "No-kidnapping option advances beyond disappearance and rescue dialogue");
 Check(NoChaniKidnapping.RedirectPhase(0x60, false) == 0x60 && NoChaniKidnapping.RedirectPhase(0x5D, true) == 0x5D && NoChaniKidnapping.RedirectPhase(0x6C, true) == 0x6C, "Other phases and vanilla progression are unchanged");
 byte[] captivity = new byte[DuneSaveCodec.GameStateLength];
@@ -305,6 +312,9 @@ CheckBox mapOption = window.GetVisualDescendants().OfType<CheckBox>().Single(c =
 Check(mapOption.IsEnabled && mapOption.IsChecked == false, "Full map reveal is available and off by default");
 CheckBox chaniOption = window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping"));
 Check(chaniOption.IsEnabled && chaniOption.IsChecked == false, "No Chani kidnapping is available and off by default");
+CheckBox victoryOption = window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "continue-after-harkonnen-defeat"));
+Check(victoryOption.IsEnabled && victoryOption.IsChecked == false, "Continue after victory is available and off by default");
+victoryOption.IsChecked = true;
 chaniOption.IsChecked = true;
 mapOption.IsChecked = true;
 Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -312,12 +322,18 @@ Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Dispatcher.UIThread.RunJobs();
 Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map")).IsChecked == true, "Full map reveal preference is remembered");
 Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping")).IsChecked == true, "No kidnapping and full-map options persist independently together");
+Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "continue-after-harkonnen-defeat")).IsChecked == true, "All three gameplay options can be saved together");
 window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map")).IsChecked = false;
 Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Dispatcher.UIThread.RunJobs();
 Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping")).IsChecked == true, "Disabling map reveal leaves the no-kidnapping option enabled");
 window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping")).IsChecked = false;
+Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Dispatcher.UIThread.RunJobs();
+Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "continue-after-harkonnen-defeat")).IsChecked == true, "Disabling the other mods preserves victory continuation");
+window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "continue-after-harkonnen-defeat")).IsChecked = false;
 Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Render("game-mods");

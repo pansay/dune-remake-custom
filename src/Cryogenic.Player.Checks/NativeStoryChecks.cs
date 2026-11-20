@@ -15,7 +15,9 @@ internal static class NativeStoryChecks {
     public static void RunEngine(string[] args) {
         string[] engineArgs = args.Where(a => a != "--engine")
             .Append($"--{nameof(Configuration.ProvidedAsmHandlersSegment)}={DriverLoadToolbox.INTERRUPT_HANDLER_SEGMENT}").ToArray();
-        Spice86.Program.RunWithOverrides<ChaniStoryCheckSupplier>(engineArgs, "5F30AEB84D67CF2E053A83C09C2890F010F2E25EE877EBEC58EA15C5B30CFFF9");
+        const string checksum = "5F30AEB84D67CF2E053A83C09C2890F010F2E25EE877EBEC58EA15C5B30CFFF9";
+        if (Environment.GetEnvironmentVariable("CRYOGENIC_VICTORY_CHECK") != null) Spice86.Program.RunWithOverrides<VictoryStoryCheckSupplier>(engineArgs, checksum);
+        else Spice86.Program.RunWithOverrides<ChaniStoryCheckSupplier>(engineArgs, checksum);
     }
 
     public static async Task Run(string installedEngine, string originalData, string temporary, Action<bool, string> check) {

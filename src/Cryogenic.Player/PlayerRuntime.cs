@@ -26,12 +26,17 @@ public sealed class PlayerRuntime {
     private bool fullVisionMapReveal;
     private bool mapRevealApplied;
     private bool noChaniKidnapping;
+    private bool continueAfterHarkonnenDefeat;
+    private ushort? victoryHudCompanions;
+    private byte[]? victoryCompanionPalette;
+    private uint victoryGraphicsBase;
 
     private PlayerRuntime(Machine machine, SessionOptions options) {
         this.machine = machine;
         this.options = options;
         fullVisionMapReveal = options.FullVisionMapReveal;
         noChaniKidnapping = options.NoChaniKidnapping;
+        continueAfterHarkonnenDefeat = options.ContinueAfterHarkonnenDefeat;
     }
 
     public static void Attach(Machine machine) {
@@ -105,7 +110,7 @@ public sealed class PlayerRuntime {
         Require(0x9FD1, [0x75, 0x05]);
         Require(0xB3F1, [0xE8, 0xF5, 0x86]);
         // Repair an existing captivity save before the native loader rebuilds its room.
-        Hook(0xB3F1, RecoverChaniIfNeeded);
+        Hook(0xB3F1, () => { RecoverChaniIfNeeded(); RestoreContinuedCampaign(); });
         Hook(0x11CB, () => {
             if (!noChaniKidnapping) return;
             // The native cure and its message have completed. Keep Chani's location
@@ -120,7 +125,96 @@ public sealed class PlayerRuntime {
             if (!noChaniKidnapping || machine.CpuState.SI != NoChaniKidnapping.CuredReportRecord || machine.Memory[dataBase + NoChaniKidnapping.GamePhaseOffset] < NoChaniKidnapping.AfterRescuePhase) return;
             machine.CpuState.ZeroFlag = (machine.Memory.UInt16[dataBase + 0x34] & NoChaniKidnapping.Cured) == 0;
         });
+        InstallVictoryContinuation();
         Publish("running");
+    }
+
+    private void InstallVictoryContinuation() {
+        Require(0x16FC, [0xC6, 0x06, 0x2A, 0x00, 0xC8]);
+        Require(0x167C, [0x33, 0xC0, 0xA2, 0x74, 0x47]);
+        Require(0x1736, [0xBE, 0x6B, 0x17]);
+        Require(0x6E28, [0xF6, 0x45, 0x0A, 0x08]);
+        Require(0x749D, [0xC6, 0x06, 0xC2, 0x00, 0x01]);
+        Require(0x73A9, [0xFE, 0x06, 0xC2, 0x00]);
+        Hook(0x16FC, () => {
+            // A return visit to the conquered throne room must not replay the ending.
+            if (HasContinuedVictory) machine.CpuState.IP = 0x407B;
+            else CaptureVictoryHud();
+        });
+        Hook(0x167C, () => {
+            var changes = HarkonnenVictoryContinuation.PlanVictory(machine.Memory.ReadRam(DuneSaveCodec.GameStateLength, dataBase), continueAfterHarkonnenDefeat, victoryHudCompanions);
+            if (changes.Count == 0) return;
+            ApplyStateChanges(changes);
+            // Reuse the original sequence cleanup and world redraw. The credits
+            // cleanup has not yet cleared the party, UI tasks or display layout.
+            machine.Memory.UInt16[dataBase + 0x4776] = (ushort)((machine.Memory.UInt16[dataBase + 0x4776] & 0xFF00) | 1);
+            machine.Memory[dataBase + 0x46EB] = 0;
+            machine.Memory[dataBase + 0x11C9] = 0;
+            machine.Memory[dataBase + 0x46D9] = 0;
+            machine.Memory[dataBase + 0x47A6] = 0xFF;
+            machine.Memory.UInt16[dataBase + 0x2222] = 0;
+            RestoreVictoryHudPalette();
+            machine.Memory[dataBase + 0xFB] = 1;
+            ApplyTextMode(machine.Memory[dataBase + 0x28E8]);
+            machine.CpuState.IP = 0x1736;
+        });
+        Hook(0x6E28, () => {
+            // Captured forts normally turn into sietches after two days. Keep the
+            // conquered palace and its rooms while retaining the troop's daily work.
+            if (HasContinuedVictory && machine.CpuState.DI == HarkonnenVictoryContinuation.PalaceOffset) machine.CpuState.IP = 0x6E4B;
+        });
+        Hook(0x749D, () => {
+            if (HasContinuedVictory) machine.CpuState.IP = 0x74A2;
+        });
+        Hook(0x73A9, () => {
+            if (HasContinuedVictory) machine.CpuState.IP = 0x7399;
+        });
+    }
+
+    private void CaptureVictoryHud() {
+        victoryHudCompanions = machine.Memory.UInt16[dataBase + 0x1152];
+        if (!continueAfterHarkonnenDefeat) return;
+        victoryGraphicsBase = (uint)machine.Memory.UInt16[dataBase + 0x38BF] << 4;
+        if (machine.Memory.UInt16[dataBase + 0x38BD] != 0x0106 ||
+            !machine.Memory.ReadRam(7, victoryGraphicsBase + 0x09E2).SequenceEqual(new byte[] { 0x50, 0x53, 0x51, 0x56, 0x57, 0x1E, 0x06 })) {
+            throw new InvalidDataException("Unsupported Dune graphics driver for victory continuation.");
+        }
+        victoryCompanionPalette = machine.Memory.ReadRam(48, victoryGraphicsBase + 0x05BF + 224 * 3);
+    }
+
+    private void RestoreVictoryHudPalette() {
+        if (victoryCompanionPalette == null) return;
+        // FINAL fades the fixed companion colours to black. Restore only those
+        // entries in the native VGA cache and fade target; the room and sky keep
+        // their normal palettes, and the original palette flush updates the DAC.
+        for (int i = 0; i < victoryCompanionPalette.Length; i++) {
+            machine.Memory[victoryGraphicsBase + 0x05BF + 224 * 3 + (uint)i] = victoryCompanionPalette[i];
+            machine.Memory[victoryGraphicsBase + 0x02BF + 224 * 3 + (uint)i] = victoryCompanionPalette[i];
+        }
+        for (uint i = 224; i < 240; i++) machine.Memory[victoryGraphicsBase + 0x01BF + i] = 1;
+        machine.Memory[victoryGraphicsBase + 0x01BE] = 1;
+    }
+
+    private bool HasContinuedVictory =>
+        machine.Memory[dataBase + HarkonnenVictoryContinuation.StoryPhaseOffset] == HarkonnenVictoryContinuation.ContinuedCampaignPhase &&
+        machine.Memory[dataBase + HarkonnenVictoryContinuation.PalaceAppearanceOffset] == HarkonnenVictoryContinuation.PalaceAppearance;
+
+    private void RestoreContinuedCampaign() {
+        if (continueAfterHarkonnenDefeat && machine.Memory[dataBase + HarkonnenVictoryContinuation.StoryPhaseOffset] == HarkonnenVictoryContinuation.OriginalVictoryPhase) {
+            ApplyStateChanges(HarkonnenVictoryContinuation.PlanVictory(machine.Memory.ReadRam(DuneSaveCodec.GameStateLength, dataBase), enabled: true));
+        }
+        MaintainContinuedCampaign();
+    }
+
+    private void MaintainContinuedCampaign() {
+        if (!HasContinuedVictory) return;
+        if (machine.Memory[dataBase + 0xC2] == 0 && (machine.Memory[dataBase + 0xBF] & 0xB0) == 0 &&
+            machine.Memory.UInt16[dataBase + 0xBC] == 0 && machine.Memory.UInt16[dataBase + 0xC0] == 0 && machine.Memory[dataBase + 0xCF] == 0) return;
+        ApplyStateChanges(HarkonnenVictoryContinuation.PlanMaintenance(machine.Memory.ReadRam(DuneSaveCodec.GameStateLength, dataBase)));
+    }
+
+    private void ApplyStateChanges(IReadOnlyList<DuneStateChange> changes) {
+        foreach (DuneStateChange change in changes) machine.Memory[dataBase + (uint)change.Offset] = change.Value;
     }
 
     private void Require(ushort offset, byte[] bytes) {
@@ -149,6 +243,7 @@ public sealed class PlayerRuntime {
             }
             if (!mapRevealApplied) ApplyFullVisionMapReveal();
             RecoverChaniIfNeeded();
+            MaintainContinuedCampaign();
             if (!ready) {
                 ready = true;
                 Publish("running");
@@ -187,6 +282,7 @@ public sealed class PlayerRuntime {
                                 pendingTextMode = command.DialogueTextMode;
                                 fullVisionMapReveal = command.FullVisionMapReveal;
                                 noChaniKidnapping = command.NoChaniKidnapping;
+                                continueAfterHarkonnenDefeat = command.ContinueAfterHarkonnenDefeat;
                                 mapRevealApplied = false;
                                 capturedSave = null;
                                 pausePage = null;

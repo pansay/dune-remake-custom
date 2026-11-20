@@ -213,6 +213,7 @@ public sealed class PlayerWindow : Window {
         Scrollable(panel);
         CheckBox? fullMap = null;
         CheckBox? noKidnapping = null;
+        CheckBox? continueAfterVictory = null;
         foreach (GameModIdea idea in GameModIdeas.All) {
             StackPanel description = new() { Spacing = 3 };
             description.Children.Add(new TextBlock { Text = idea.Name, FontSize = 14, FontWeight = FontWeight.Medium, Foreground = Brush(idea.Implemented ? "#F3E4CE" : "#929994"), TextWrapping = TextWrapping.Wrap });
@@ -220,20 +221,24 @@ public sealed class PlayerWindow : Window {
             bool selected = idea.Id switch {
                 "full-visions-reveal-map" => controller.Settings.FullVisionMapReveal,
                 "no-chani-kidnapping" => controller.Settings.NoChaniKidnapping,
+                "continue-after-harkonnen-defeat" => controller.Settings.ContinueAfterHarkonnenDefeat,
                 _ => false
             };
             CheckBox option = new() { Tag = idea.Id, Content = description, IsChecked = selected, IsEnabled = idea.Implemented, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
             if (idea.Id == "full-visions-reveal-map") fullMap = option;
             if (idea.Id == "no-chani-kidnapping") noKidnapping = option;
+            if (idea.Id == "continue-after-harkonnen-defeat") continueAfterVictory = option;
             panel.Children.Add(option);
         }
         panel.Children.Add(Button("Save mods", () => {
             PlayerSettings saved = controller.SettingsStore.Load();
             saved.FullVisionMapReveal = fullMap?.IsChecked == true;
             saved.NoChaniKidnapping = noKidnapping?.IsChecked == true;
+            saved.ContinueAfterHarkonnenDefeat = continueAfterVictory?.IsChecked == true;
             controller.SettingsStore.Save(saved);
             controller.Settings.FullVisionMapReveal = saved.FullVisionMapReveal;
             controller.Settings.NoChaniKidnapping = saved.NoChaniKidnapping;
+            controller.Settings.ContinueAfterHarkonnenDefeat = saved.ContinueAfterHarkonnenDefeat;
             page.Content = settingsPage;
             notice.Text = controller.Running ? "Game mods saved. Changes apply when you resume; reopen the map to refresh it." : "Game mods saved.";
             return Task.CompletedTask;

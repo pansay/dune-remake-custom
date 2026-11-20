@@ -11,6 +11,7 @@ public sealed class PlayerSettings {
     public string? GameDataDirectory { get; set; }
     public bool FullVisionMapReveal { get; set; }
     public bool NoChaniKidnapping { get; set; }
+    public bool ContinueAfterHarkonnenDefeat { get; set; }
 }
 
 public static class PlayerPaths {

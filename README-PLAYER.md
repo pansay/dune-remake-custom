@@ -30,7 +30,11 @@ After Paul successfully drinks the Water of Life, the mod discovers all 70 locat
 
 Discovery preserves coordinates, names, ownership, troops, prospecting information, visits and story phase. Places become visible without being marked as visited or conquered. The native known-sietch counter is updated consistently with normal discovery. Revealed places are stored in normal Dune save files; turning the mod off stops future automatic reveals and leaves existing discoveries intact.
 
-The other three ideas remain disabled placeholders: continued play after the Harkonnen defeat; late Sardaukar surprise attacks; and new territories with a Sardaukar palace and the Emperor after that defeat. Those new territories are not part of the original 70-location map.
+**Continue after the Harkonnen defeat** is available in Settings → Game mods and is **off by default**. Enable it and choose **Save mods** before completing the final attack. The original victory conversation and final artwork play, then you return to the conquered palace entrance with your companions. The closing credits are skipped. Time, troop orders, spice production, travel, and ecology continue, and normal saving/loading remains available.
+
+The palace stays conquered and keeps its rooms; returning to its throne room does not replay the ending. The victory dialogue's exiled opponents leave the scene, and the former Emperor's tribute demands end without changing your spice stock. The saved campaign records that victory has happened. Turning the setting off later leaves that campaign playable; load a save from before victory with the option off for the original ending. This option adds no new enemies or territories.
+
+The other two ideas remain disabled placeholders: late Sardaukar surprise attacks; and new territories with a Sardaukar palace and the Emperor after the Harkonnen defeat. Those new territories are not part of the original 70-location map.
 
 ## Original game data and saves
 
@@ -73,6 +77,12 @@ The optional Chani story check runs the original DOS healing and follow actions 
 
 ```sh
 dotnet run --project src/Cryogenic.Player.Checks -c Release -- --chani-mod-integration .local/app/Cryogenic /path/to/original/dune
+```
+
+The optional victory check drives the original final-attack and victory routines in isolated fixtures, compares the original ending with continuation, and exercises time, ecology, orders, travel, palace visits, and saving/loading after victory. The test driver is absent from the published player:
+
+```sh
+dotnet run --project src/Cryogenic.Player.Checks -c Release -- --victory-mod-integration .local/app/Cryogenic /path/to/original/dune
 ```
 
 For Windows, publish `src/Cryogenic/Cryogenic.csproj` with `-r win-x64 --self-contained true` and run `Cryogenic.exe --player`. The player code is portable; this fork's end-to-end game and audio validation was performed on Apple Silicon macOS.
