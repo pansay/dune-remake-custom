@@ -10,6 +10,7 @@ public sealed class PlayerSettings {
     public int Cycles { get; set; } = 5500;
     public string? GameDataDirectory { get; set; }
     public bool FullVisionMapReveal { get; set; }
+    public bool NoChaniKidnapping { get; set; }
 }
 
 public static class PlayerPaths {

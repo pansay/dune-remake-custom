@@ -66,7 +66,7 @@ public sealed class PlayerController : IDisposable {
         sessionId = Guid.NewGuid().ToString("N");
         Status = null;
         if (File.Exists(SessionFiles.Command)) File.Delete(SessionFiles.Command);
-        AtomicJson.Write(SessionFiles.Options, new SessionOptions(sessionId, mode, Settings.SubtitleBalloons, Settings.DialogueTextMode, Settings.FullVisionMapReveal));
+        AtomicJson.Write(SessionFiles.Options, new SessionOptions(sessionId, mode, Settings.SubtitleBalloons, Settings.DialogueTextMode, Settings.FullVisionMapReveal, Settings.NoChaniKidnapping));
         ProcessStartInfo start = new(engineExecutable ?? Environment.ProcessPath ?? throw new InvalidOperationException("Cannot find the game launcher.")) {
             WorkingDirectory = PlayerPaths.WorkingGame,
             UseShellExecute = false,
@@ -115,7 +115,7 @@ public sealed class PlayerController : IDisposable {
 
     public string Send(string action, int slot = 0, string? name = null) {
         string id = Guid.NewGuid().ToString("N");
-        AtomicJson.Write(SessionFiles.Command, new PlayerCommand(id, action, slot, name, Settings.SubtitleBalloons, Settings.DialogueTextMode, Settings.FullVisionMapReveal));
+        AtomicJson.Write(SessionFiles.Command, new PlayerCommand(id, action, slot, name, Settings.SubtitleBalloons, Settings.DialogueTextMode, Settings.FullVisionMapReveal, Settings.NoChaniKidnapping));
         return id;
     }
 

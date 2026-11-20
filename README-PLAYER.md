@@ -20,13 +20,17 @@ Dialogue balloons are enabled by default. Settings offers the original **Subtitl
 
 ## Game mods
 
+**No Chani kidnapping** is available in Settings → Game mods and is **off by default**. Enable it and choose **Save mods**. The normal epidemic, Chani's offer to help, and her treatment time remain. Leave her at the sick sietch as usual; once she finishes curing the Fremen, her original success vision is sent, she stays at that sietch, and the story advances past the disappearance and rescue chapter. Return to her and choose **Come with me**. Cured Fremen can still thank her, while kidnapping and rescue dialogue is skipped. The later fortress campaign and final attack keep their normal requirements.
+
+The option also supports an existing save where Chani is already missing after the cure: she returns to the cured sietch, or the Atreides palace if that sietch has since been lost. If she is already safely present or following Paul, she stays where she is. Story progress and her restored position are saved normally; turning the option off does not undo a completed cure or restart the kidnapping. It does not bypass unfinished treatment.
+
 **Full visions reveal the whole map** is available in Settings → Game mods. It is **off by default**. Enable it and choose **Save mods**, then resume, start, or load a game. If the map was already open, close and reopen it to refresh the markers.
 
 After Paul successfully drinks the Water of Life, the mod discovers all 70 locations already defined by the original game: sietches, fortresses, smuggler camps and both palaces. An existing save that has reached that point is supported. First visions alone do not activate it.
 
 Discovery preserves coordinates, names, ownership, troops, prospecting information, visits and story phase. Places become visible without being marked as visited or conquered. The native known-sietch counter is updated consistently with normal discovery. Revealed places are stored in normal Dune save files; turning the mod off stops future automatic reveals and leaves existing discoveries intact.
 
-The other four ideas remain disabled placeholders: no Chani kidnapping; continued play after the Harkonnen defeat; late Sardaukar surprise attacks; and new territories with a Sardaukar palace and the Emperor after that defeat. Those new territories are not part of the original 70-location map.
+The other three ideas remain disabled placeholders: continued play after the Harkonnen defeat; late Sardaukar surprise attacks; and new territories with a Sardaukar palace and the Emperor after that defeat. Those new territories are not part of the original 70-location map.
 
 ## Original game data and saves
 
@@ -63,6 +67,12 @@ The optional full-map integration check uses isolated copies of local saves to v
 
 ```sh
 dotnet run --project src/Cryogenic.Player.Checks -c Release -- --map-mod-integration .local/app/Cryogenic /path/to/original/dune
+```
+
+The optional Chani story check runs the original DOS healing and follow actions with an isolated fixture, checks the original dialogue conditions, and loads an existing captivity fixture through the published player. Its story driver belongs only to the checks executable and is absent from the player build:
+
+```sh
+dotnet run --project src/Cryogenic.Player.Checks -c Release -- --chani-mod-integration .local/app/Cryogenic /path/to/original/dune
 ```
 
 For Windows, publish `src/Cryogenic/Cryogenic.csproj` with `-r win-x64 --self-contained true` and run `Cryogenic.exe --player`. The player code is portable; this fork's end-to-end game and audio validation was performed on Apple Silicon macOS.

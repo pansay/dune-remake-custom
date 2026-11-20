@@ -25,11 +25,13 @@ public sealed class PlayerRuntime {
     private int? pendingTextMode;
     private bool fullVisionMapReveal;
     private bool mapRevealApplied;
+    private bool noChaniKidnapping;
 
     private PlayerRuntime(Machine machine, SessionOptions options) {
         this.machine = machine;
         this.options = options;
         fullVisionMapReveal = options.FullVisionMapReveal;
+        noChaniKidnapping = options.NoChaniKidnapping;
     }
 
     public static void Attach(Machine machine) {
@@ -98,6 +100,26 @@ public sealed class PlayerRuntime {
         Hook(0xD820, SafeTick);
         Require(0x5DCE, [0xA0, 0xEB, 0x46]);
         Hook(0x5DCE, ApplyFullVisionMapReveal);
+        Require(0x11CB, [0xC6, 0x06, 0xFF, 0x00, 0x00]);
+        Require(0x121F, [0x3A, 0x06, 0x2A, 0x00]);
+        Require(0x9FD1, [0x75, 0x05]);
+        Require(0xB3F1, [0xE8, 0xF5, 0x86]);
+        // Repair an existing captivity save before the native loader rebuilds its room.
+        Hook(0xB3F1, RecoverChaniIfNeeded);
+        Hook(0x11CB, () => {
+            if (!noChaniKidnapping) return;
+            // The native cure and its message have completed. Keep Chani's location
+            // and use the original phase dispatcher to finish the rescue chapter.
+            machine.CpuState.AL = NoChaniKidnapping.AfterRescuePhase;
+            machine.CpuState.IP = 0x121F;
+        });
+        Hook(0x121F, () => machine.CpuState.AL = NoChaniKidnapping.RedirectPhase(machine.CpuState.AL, noChaniKidnapping));
+        Hook(0x9FD1, () => {
+            // Keep the cured Fremen's thanks available beyond the skipped chapter.
+            // The adjacent "she's vanished" line keeps its original condition.
+            if (!noChaniKidnapping || machine.CpuState.SI != NoChaniKidnapping.CuredReportRecord || machine.Memory[dataBase + NoChaniKidnapping.GamePhaseOffset] < NoChaniKidnapping.AfterRescuePhase) return;
+            machine.CpuState.ZeroFlag = (machine.Memory.UInt16[dataBase + 0x34] & NoChaniKidnapping.Cured) == 0;
+        });
         Publish("running");
     }
 
@@ -126,6 +148,7 @@ public sealed class PlayerRuntime {
                 pendingTextMode = null;
             }
             if (!mapRevealApplied) ApplyFullVisionMapReveal();
+            RecoverChaniIfNeeded();
             if (!ready) {
                 ready = true;
                 Publish("running");
@@ -163,6 +186,7 @@ public sealed class PlayerRuntime {
                             case "resume":
                                 pendingTextMode = command.DialogueTextMode;
                                 fullVisionMapReveal = command.FullVisionMapReveal;
+                                noChaniKidnapping = command.NoChaniKidnapping;
                                 mapRevealApplied = false;
                                 capturedSave = null;
                                 pausePage = null;
@@ -225,6 +249,14 @@ public sealed class PlayerRuntime {
         // Follow the native map-dirty mechanism so an already open map is redrawn.
         if ((machine.Memory[dataBase + 0x11C9] & 3) != 0) machine.Memory[dataBase + 0x4728] |= 1;
         if (machine.Memory[dataBase + 0x46EB] != 0) machine.Memory[dataBase + 0x46EC] = 1;
+    }
+
+    private void RecoverChaniIfNeeded() {
+        if (!noChaniKidnapping || !NoChaniKidnapping.IsCaptivityPhase(machine.Memory[dataBase + NoChaniKidnapping.GamePhaseOffset])) return;
+        byte[] state = machine.Memory.ReadRam(DuneSaveCodec.GameStateLength, dataBase);
+        // The 6Ch callback is a RET. Existing captivity saves need only its durable
+        // state; replaying the old phase triggers would invent a rescue scene.
+        foreach (DuneStateChange change in NoChaniKidnapping.PlanRecovery(state, enabled: true)) machine.Memory[dataBase + (uint)change.Offset] = change.Value;
     }
 
     private void PersistTextMode() {

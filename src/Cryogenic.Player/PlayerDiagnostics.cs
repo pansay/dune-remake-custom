@@ -33,6 +33,10 @@ internal static class PlayerDiagnostics {
             PaletteTransition = machine.Memory[dataBase + 0xCE80],
             WorldView = machine.Memory[dataBase + 0xFB],
             FullVisions = (machine.Memory[dataBase + FullVisionMapReveal.PowersOffset] & FullVisionMapReveal.WaterOfLifePower) != 0,
+            StoryPhase = machine.Memory[dataBase + NoChaniKidnapping.GamePhaseOffset],
+            IllLocations = machine.Memory[dataBase + NoChaniKidnapping.IllLocationCountOffset],
+            ChaniLocationAndRoom = machine.Memory.UInt16[dataBase + NoChaniKidnapping.ChaniOffset],
+            ChaniLocationSlot = machine.Memory.UInt16[dataBase + NoChaniKidnapping.ChaniOffset + 2],
             KnownLocations = Enumerable.Range(0, FullVisionMapReveal.LocationCount).Count(i => (machine.Memory[dataBase + (uint)(FullVisionMapReveal.LocationsOffset + i * FullVisionMapReveal.LocationSize + FullVisionMapReveal.LocationFlagsOffset)] & FullVisionMapReveal.Hidden) == 0)
         });
     }

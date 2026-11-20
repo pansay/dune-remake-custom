@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Cryogenic.Player/Cryogenic.Player.csproj" />
+    <ProjectReference Include="../Cryogenic/Cryogenic.csproj" />
   </ItemGroup>
 </Project>

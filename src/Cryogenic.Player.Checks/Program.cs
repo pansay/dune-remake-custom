@@ -8,12 +8,23 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cryogenic.Player;
 
+if (args.Contains("--engine")) {
+    NativeStoryChecks.RunEngine(args);
+    return;
+}
+
 string temporary = Path.Combine(Path.GetTempPath(), "cryogenic-checks-" + Guid.NewGuid().ToString("N"));
 Environment.SetEnvironmentVariable("CRYOGENIC_PLAYER_HOME", temporary);
 Directory.CreateDirectory(temporary);
 int checks = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); checks++; }
 void Invalid(Action action, string name) { try { action(); } catch (InvalidDataException) { checks++; return; } throw new Exception(name); }
+
+if (args.Length >= 3 && args[0] == "--chani-mod-integration") {
+    await NativeStoryChecks.Run(args[1], args[2], temporary, Check);
+    Console.WriteLine($"Passed {checks} Chani story checks. Isolated data: {temporary}");
+    return;
+}
 
 if (args.Length >= 3 && args[0] is "--integration" or "--map-mod-integration") {
     Environment.SetEnvironmentVariable("CRYOGENIC_ENGINE_HEADLESS", "1");
@@ -154,6 +165,37 @@ if (args.Length >= 3 && args[0] is "--integration" or "--map-mod-integration") {
 }
 
 Random random = new(1992);
+Check(NoChaniKidnapping.RedirectPhase(0x60, true) == 0x6C && NoChaniKidnapping.RedirectPhase(0x64, true) == 0x6C && NoChaniKidnapping.RedirectPhase(0x68, true) == 0x6C, "No-kidnapping option advances beyond disappearance and rescue dialogue");
+Check(NoChaniKidnapping.RedirectPhase(0x60, false) == 0x60 && NoChaniKidnapping.RedirectPhase(0x5D, true) == 0x5D && NoChaniKidnapping.RedirectPhase(0x6C, true) == 0x6C, "Other phases and vanilla progression are unchanged");
+byte[] captivity = new byte[DuneSaveCodec.GameStateLength];
+captivity[0x2A] = 0x64;
+captivity[FullVisionMapReveal.LocationsEnd] = captivity[FullVisionMapReveal.LocationsEnd + 1] = 0xFF;
+captivity[NoChaniKidnapping.ChaniOffset + 14] = 7;
+captivity[0x108] = 0x20;
+captivity[0x124] = 0x30;
+captivity[NoChaniKidnapping.ChaniOffset] = 3;
+captivity[NoChaniKidnapping.ChaniOffset + 1] = 0x30;
+captivity[NoChaniKidnapping.ChaniOffset + 2] = 0x80;
+captivity[NoChaniKidnapping.ChaniOffset + 3] = 2;
+int curedSite = 0x138;
+captivity[curedSite + 8] = 5;
+System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(captivity.AsSpan(NoChaniKidnapping.TroopsOffset + 4), (ushort)curedSite);
+System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(captivity.AsSpan(NoChaniKidnapping.TroopsOffset + 18), NoChaniKidnapping.Cured);
+Check(NoChaniKidnapping.PlanRecovery(captivity, false).Count == 0, "Disabled option leaves an existing kidnapping untouched");
+byte[] captivityBefore = captivity.ToArray();
+foreach (var change in NoChaniKidnapping.PlanRecovery(captivity, true)) captivity[change.Offset] = change.Value;
+Check(captivity[0x2A] == 0x6C && captivity[0x1048] == 2 && captivity[0x1049] == 5 && captivity[0x104B] == 3, "Existing kidnapped Chani returns to the cured sietch");
+Check(Enumerable.Range(0, captivity.Length).All(i => i == 0x2A || i == 0xFF || i is >= 0x1048 and <= 0x104B || captivity[i] == captivityBefore[i]), "Recovery preserves troops, economy, illness, companions, ownership and final assault");
+Check(NoChaniKidnapping.PlanRecovery(captivity, true).Count == 0, "Completed recovery is idempotent");
+byte[] unfinished = captivityBefore.ToArray(); unfinished[NoChaniKidnapping.IllLocationCountOffset] = 1;
+Check(NoChaniKidnapping.PlanRecovery(unfinished, true).Count == 0, "Recovery never skips unfinished treatment");
+byte[] following = captivityBefore.ToArray(); following[NoChaniKidnapping.ChaniFlagsOffset] = NoChaniKidnapping.Following;
+Check(NoChaniKidnapping.PlanRecovery(following, true).All(c => c.Offset is 0x2A or 0xFF), "Chani already following Paul keeps her position and party status");
+byte[] lostSite = captivityBefore.ToArray(); lostSite[curedSite + 8] = 0x28;
+foreach (var change in NoChaniKidnapping.PlanRecovery(lostSite, true)) lostSite[change.Offset] = change.Value;
+Check(lostSite[0x1049] == 0x20 && lostSite[0x104B] == 1, "Recovery uses the Atreides palace if the cured sietch was lost");
+byte[] invalidChani = captivityBefore.ToArray(); invalidChani[NoChaniKidnapping.ChaniOffset + 14] = 6;
+Invalid(() => NoChaniKidnapping.PlanRecovery(invalidChani, true), "Recovery rejects an unsupported character record");
 byte[] mapState = new byte[DuneSaveCodec.GameStateLength];
 random.NextBytes(mapState);
 mapState[FullVisionMapReveal.PowersOffset] = 1;
@@ -261,12 +303,21 @@ Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Dispatcher.UIThread.RunJobs();
 CheckBox mapOption = window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map"));
 Check(mapOption.IsEnabled && mapOption.IsChecked == false, "Full map reveal is available and off by default");
+CheckBox chaniOption = window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping"));
+Check(chaniOption.IsEnabled && chaniOption.IsChecked == false, "No Chani kidnapping is available and off by default");
+chaniOption.IsChecked = true;
 mapOption.IsChecked = true;
 Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Dispatcher.UIThread.RunJobs();
 Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map")).IsChecked == true, "Full map reveal preference is remembered");
+Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping")).IsChecked == true, "No kidnapping and full-map options persist independently together");
 window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "full-visions-reveal-map")).IsChecked = false;
+Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Dispatcher.UIThread.RunJobs();
+Check(window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping")).IsChecked == true, "Disabling map reveal leaves the no-kidnapping option enabled");
+window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Tag, "no-chani-kidnapping")).IsChecked = false;
 Find("Save mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Find("Game mods").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Render("game-mods");
