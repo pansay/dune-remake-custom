@@ -1,6 +1,6 @@
 # Cryogenic Player edition
 
-This local fork adds a player menu to Cryogenic 0.1.9 while keeping the original Dune CD game, its resources, and the working Mac audio correction. The complete upstream Git history is retained.
+Dune Remake Custom adds a player menu to Cryogenic 0.1.9 while keeping the original Dune CD game, its resources, and the working Mac audio correction. The complete upstream Git history is retained.
 
 ## Play
 
@@ -91,12 +91,10 @@ The original command-line engine remains available: launch with the normal Spice
 
 ## Fork details
 
-Base: upstream tag `v0.1.9`, commit `02af0c6`. Branch: `feature/game-menu-and-saves`. Remote `upstream` points to OpenRakis/Cryogenic. No personal remote has been added and nothing has been pushed.
-
-To upload later, create your repository and add its address as `origin`, then push this branch. Preserve the upstream license, notices, and vendored audio license files. Update the repository's description and release notes to identify it as a modified fork.
+Base: upstream tag `v0.1.9`, commit `02af0c6`. The custom version is published on **`master`**, the default branch of <a href="https://github.com/pansay/dune-remake-custom" target="_blank" rel="noopener noreferrer">pansay/dune-remake-custom</a>. Remote `origin` points to this fork; remote `upstream` points to <a href="https://github.com/OpenRakis/Cryogenic" target="_blank" rel="noopener noreferrer">OpenRakis/Cryogenic</a>. The original Git history, license, notices, and vendored audio license files are retained.
 
 The native Avalonia menu lives in `src/Cryogenic.Player`. It manages one engine child per player-data directory. The game bridge installs hooks after DOS relocation, checks the expected instruction bytes, and makes changes in emulated RAM only. New-game and load startup keep the original resource and palette initialization while bypassing the movie. Loading also finishes the persistent interface setup before restoring the saved world state, so the interface artwork is present when the scene is redrawn. Save capture occurs at the central input loop before pausing; it packs the same map and game-state regions as the original save routine. The original mixer commit callback persists text choices without recording temporary cutscene overrides.
 
 The patched `Spice86.Audio` source is included with its upstream commit and license notices, so the audio fix is reproducible. See `src/Spice86.Audio/UPSTREAM.txt`. The main project keeps semantic analyzers enabled but does not enforce formatting of the inherited disassembly during builds.
 
-Upstream project documentation remains in `README.md`. Source references with explicit browser link targets are in `docs/player-sources.html`.
+The main `README.md` introduces this fork and explains how to play. The original upstream developer documentation is preserved in `docs/UPSTREAM-README.md`. Source references with explicit browser link targets are in `docs/player-sources.html`.

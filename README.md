@@ -1,262 +1,175 @@
-![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)
-![OSX](https://img.shields.io/badge/-OSX-black?logo=apple)
-![Windows](https://img.shields.io/badge/-Windows-red?logo=windows)
+# Dune Remake Custom
 
-# Cryogenic
+A player edition of **Cryo’s Dune (1992)** with a start menu, 100 save slots, persistent settings and optional gameplay mods.
 
-[![PR Validation](https://github.com/OpenRakis/Cryogenic/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/OpenRakis/Cryogenic/actions/workflows/pr-validation.yml)
-[![Release](https://github.com/OpenRakis/Cryogenic/actions/workflows/release.yml/badge.svg)](https://github.com/OpenRakis/Cryogenic/actions/workflows/release.yml)
-[![Deploy Pages](https://github.com/OpenRakis/Cryogenic/actions/workflows/static.yml/badge.svg)](https://github.com/OpenRakis/Cryogenic/actions/workflows/static.yml)
-[![CodeQL](https://github.com/OpenRakis/Cryogenic/actions/workflows/pr-validation.yml/badge.svg?event=push)](https://github.com/OpenRakis/Cryogenic/security/code-scanning)
-[![License](https://img.shields.io/github/license/OpenRakis/Cryogenic)](LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/OpenRakis/Cryogenic)](https://github.com/OpenRakis/Cryogenic/releases/latest)
-[![.NET Version](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+This is a fork of <a href="https://github.com/OpenRakis/Cryogenic" target="_blank" rel="noopener noreferrer">OpenRakis/Cryogenic</a>, based on version **0.1.9**. It uses the original Dune CD game through <a href="https://github.com/OpenRakis/Spice86" target="_blank" rel="noopener noreferrer">Spice86</a>, together with Cryogenic’s C# replacements and this fork’s menu and gameplay changes. You supply the original game files.
 
-C# re-implementation of Cryo's Dune (CD Version, 1992) running on [Spice86](https://github.com/OpenRakis/Spice86).
+**Tested on Apple Silicon macOS.** Build instructions for Windows and Linux are included below; this fork’s gameplay and audio checks were performed on macOS.
 
-**[Project page](https://openrakis.github.io/Cryogenic/)**
+![The custom Dune start menu, with New game, Load game, Play intro, Settings and Exit.](docs/images/player-menu.png)
 
----
+## What this version adds
 
-## Table of Contents
+- **A start and pause menu:** New game, Load game, Play intro, Settings and Exit, plus Resume game and Save game during a session.
+- **100 named save slots**, with dates, the in-game day and a backup when replacing a slot.
+- **Remembered text settings:** the original Subtitles, Balloons and No subtitles choices. Balloons are enabled by default, and changes made in the original mixer are also remembered.
+- **Three independent gameplay mods:** keep Chani available, reveal the map after the Water of Life, and continue playing after defeating the Harkonnens.
+- **Corrected save loading**, including the scene palette and interface artwork.
+- **Mac audio corrections** for crackling and gaps, with a 120 ms playback buffer. The default game speed is **5500 cycles**, adjustable in Settings.
 
-- [What This Is](#what-this-is)
-- [Current State](#current-state)
-- [How It Works](#how-it-works)
-- [Code Structure](#code-structure)
-- [Prerequisites](#prerequisites)
-- [Build and Run](#build-and-run)
-- [Screenshots](#screenshots)
-- [Contributing](#contributing)
-- [Resources](#resources)
-- [License](#license)
+## How to play on macOS
 
----
+### 1. Get the required files
 
-## What This Is
+You need the <a href="https://dotnet.microsoft.com/en-us/download/dotnet/10.0" target="_blank" rel="noopener noreferrer">.NET 10 SDK</a> to build the player, Git to clone this repository, and these files from your own **Dune CD version 3.7**:
 
-Cryogenic replaces x86 assembly routines in the DOS executable `DNCDPRG.EXE` with C# methods. [Spice86](https://github.com/OpenRakis/Spice86) runs the original binary and redirects execution to the C# overrides at registered addresses. Assembly and C# code share the same emulated memory, so overrides can be introduced one function at a time without breaking the rest of the program.
-
-### Supported Executable
-
-SHA256 of the required `DNCDPRG.EXE` (Dune CD version 3.7):
-
-```
-5f30aeb84d67cf2e053a83c09c2890f010f2e25ee877ebec58ea15c5b30cfff9
+```text
+DNCDPRG.EXE
+DUNE.DAT
 ```
 
-The game files (`DNCDPRG.EXE`, `DUNE.DAT`) are copyrighted and must be obtained separately.
+The floppy edition is not supported. Original game files, CD images and personal saves are not included in this repository.
 
----
+### 2. Download and build this fork
 
-## Current State
+Open Terminal and run:
 
-The game is fully playable with sound and music through hybrid ASM/.NET execution.
-
-Ongoing work converts additional assembly routines into C#. Each converted routine is registered as an override and tested by running the game.
-
----
-
-## How It Works
-
-1. `Program.cs` configures command-line arguments and calls `Spice86.Program.RunWithOverrides<DuneCdOverrideSupplier>` with the expected SHA256 checksum.
-2. `DuneCdOverrideSupplier` instantiates `Overrides.Overrides`, which calls `DefineOverrides()`.
-3. `DefineOverrides()` registers C# methods at specific segment:offset addresses using `DefineFunction` (replaces CALL targets) and `DoOnTopOfInstruction` (inline hooks).
-4. At runtime, when the emulated CPU reaches a registered address, Spice86 executes the C# method instead of the original assembly. The method returns via `NearRet()` or `FarRet()` matching the original instruction.
-5. Game state is read and written through typed accessor classes (`globalsOnDs`, `globalsOnCsSegment0x2538`) that map directly to the emulated memory at the DS and CS segment bases.
-
-### Memory Segments
-
-The `Overrides` class declares five segment fields used when registering overrides:
-
-| Field | Value | Contents | Overrides registered |
-|-------|-------|----------|---------------------|
-| `cs1` | `0x1000` | Main game code (`DNCDPRG.EXE` loaded here) | ~80 functions across most override files |
-| `cs2` | `0xD000` | DNVGA — VGA graphics driver | 32 functions in `VgaDriverCode.cs`, 1 in `StaticDefinitions.cs` |
-| `cs3` | `0xE000` | DNPCS2 / DNSBP — PCM audio driver | None (declared but unused in current overrides) |
-| `cs4` | `0xE000` | Reserved for MIDI driver memory-dump hooks | 2 inline hooks for memory dumps at offsets 0x02DC and 0x03EE |
-| `cs5` | `0x0800` | Interrupt handlers (custom segment replacing default 0xF000) | None (declared for address reference) |
-
-`cs3` and `cs4` share address `0xE000`. In `DriverLoadToolbox`, PCM drivers (DNPCS2, DNSBP) load at `DRIVER2_SEGMENT = 0xE000`, and music drivers (DNMID) load at `DRIVER3_SEGMENT = 0xF000`. The MT-32 overrides in `MT32DriverCode.cs` use hardcoded `0xF000` (3 functions), not any `cs` field.
-
-### Driver Remapping
-
-`DriverLoadToolbox` temporarily removes the memory allocator's segment limit so drivers load at fixed addresses:
-
-| Driver | Name | Remapped to | Purpose |
-|--------|------|-------------|---------|
-| DNVGA | VGA graphics | `0xD000` | Display, blitting, palette, mouse cursor |
-| DNPCS2 | PC Speaker variant 2 | `0xE000` | PCM sound effects |
-| DNSBP | Sound Blaster Pro | `0xE000` | PCM sound effects |
-| DNMID | MIDI | `0xF000` | Music playback (MT-32, AdLib) |
-
-Drivers DN386, DNADL, DNADP, DNADG, DNSDB are not remapped. After each driver loads, `ResetAllocator` restores the original allocator state. The remapping hooks are injected at CS1:E57B (`RemapDrivers`) and CS1:E593 (`ResetAllocator`). Driver function tables are auto-detected at CS1:E589 (`ReadDriverFunctionTable`).
-
----
-
-## Code Structure
-
-```
-src/Cryogenic/
-├── Program.cs                     Entry point; configures args, launches Spice86
-├── DuneCdOverrideSupplier.cs      Implements IOverrideSupplier; creates Overrides instance
-├── DriverLoadToolbox.cs           Remaps driver segments to 0xD000/0xE000/0xF000
-├── Overrides/
-│   ├── Overrides.cs               Defines segment fields (cs1–cs5), registers all overrides
-│   ├── VgaDriverCode.cs           23 VGA functions: mode setting, blitting, palette, mouse cursor
-│   ├── MenuCode.cs                14 menu-type constants, 2 menu state overrides
-│   ├── DialoguesCode.cs           3 dialogue functions: counter, init, hex-digit conversion
-│   ├── MapCode.cs                 5 map/cursor functions and click-handler address constants
-│   ├── DisplayCode.cs             11 framebuffer and font selection functions
-│   ├── VideoCode.cs               3 HNM video playback functions
-│   ├── HnmCode.cs                 1 HNM file I/O function (disk read into buffer)
-│   ├── TimeCode.cs                2 day/night cycle and hour-of-day functions
-│   ├── TimerCode.cs               1 PIT 8254 timer configuration function
-│   ├── ScriptedSceneCode.cs       2 cutscene sequence data functions
-│   ├── DatastructuresCode.cs      2 memory structure functions (index-to-pointer, sprite lookup)
-│   ├── InitCode.cs                1 VGA state initialization function
-│   ├── MT32DriverCode.cs          3 Roland MT-32 MIDI driver functions at segment 0xF000
-│   ├── UnknownCode.cs             20 partially understood functions (bit ops, memcpy, state flags)
-│   └── StaticDefinitions.cs       137+ symbolic names for unoverridden functions (tracing only)
-├── Globals/                       Typed accessors added manually (Extra* files)
-└── Generated/                     Auto-generated memory accessors (do not edit)
+```sh
+git clone https://github.com/pansay/dune-remake-custom.git
+cd dune-remake-custom
+./build-player.sh
 ```
 
-### Override Files in Detail
+The build creates the player in `.local/app/`. It includes the .NET runtime, so the built player can run without a separate runtime installation.
 
-**VgaDriverCode.cs** — Replaces functions in the DNVGA driver loaded at segment 0xD000. Covers VGA mode setting (`VgaFunc00SetMode`), framebuffer blitting (`VgaFunc05Blit`), rectangle copy (`VgaFunc12CopyRectangle`), pixel write (`VgaFunc21SetPixel`), palette loading (`LoadPaletteInVgaDac`), mouse cursor draw/restore (`VgaFunc03DrawMouseCursor`, `VgaFunc04RestoreImageUnderMouseCursor`), buffer fill (`VgaFunc08FillWithZeroFor64000AtES`), texture generation (`VgaFunc36GenerateTextureOutBP`), map block copy (`CopyMapBlock`), and VGA retrace synchronization (`WaitForRetrace`).
+### 3. Add your game data and launch
 
-**MenuCode.cs** — Defines 14 menu-type constants as hex offsets (e.g. `MENU_TYPE_DIALOGUE = 0x1F7E`, `MENU_TYPE_GLOBE = 0x204A`, `MENU_TYPE_BOOK = 0x2032`). Contains two overrides: one for menu animation state transitions at CS1:D316 and one for setting the current menu type at CS1:D41B.
+Create a `dune` folder in the repository and copy your two original files into it:
 
-**DialoguesCode.cs** — Three functions: incrementing a dialogue counter at DS:47A8 (CS1:A1E8), initializing dialogue state including video index and face-zoom timing (CS1:C85B), and converting the low nibble of AL to an ASCII hex digit (CS1:A8B1).
-
-**MapCode.cs** — Defines click-handler addresses for five map modes (flat map, globe, in-game, troop movement, ornithopter). Five functions set the active click handler, initialize map cursor type, and perform an 8-byte memory copy from DS:46E3.
-
-**DisplayCode.cs** — Manages three framebuffers (front at DBD6, back at DC32, text at DBD8). Includes three font-selection functions (intro, menu, book) that set character-set addresses, plus coordinate lookup, buffer clear, and register push/pop helpers.
-
-**VideoCode.cs** — Three functions for HNM video playback: resource flag lookup from a table at DS:33A3, playback index synchronization, and completion check via the finished-flag at DBE7.
-
-**HnmCode.cs** — One function that reads HNM video data from disk through the DOS file manager, updating read offset and buffer pointers.
-
-**TimeCode.cs** — Extracts the current hour from the lower 4 bits of the game elapsed-time word at DS:0002. Calculates the next sunlight-visible day.
-
-**TimerCode.cs** — Writes a 16-bit counter value to PIT channel 0 (ports 0x43/0x40) with control byte 0x36. Called primarily on game exit.
-
-**ScriptedSceneCode.cs** — Reads 16-bit commands from the scene sequence data at DS:4854 and advances the sequence pointer.
-
-**DatastructuresCode.cs** — Converts an index table to a pointer table by adding a base offset. Retrieves sprite-sheet resource pointers by index from the table at DS:DBB0.
-
-**MT32DriverCode.cs** — Three functions at segment 0xF000 for Roland MT-32 output: a primary entry point, a MIDI byte-write to port 0x330, and an unused stub.
-
-**UnknownCode.cs** — 20 functions with observed behavior but unclear purpose. Includes bit-test operations on DBC8, multi-register shifts, 8-byte memory copies, state-flag setters, a 10-byte structure builder, a 0x5C-byte fill at DS:47F8, and three no-ops.
-
-**StaticDefinitions.cs** — Registers 137+ symbolic function names (e.g. `play_intro`, `open_dune_dat`, `allocator_init`) at their addresses for Spice86's trace output. These are not overridden; they provide readable names in execution logs.
-
----
-
-## Prerequisites
-
-1. [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
-2. `DNCDPRG.EXE` and `DUNE.DAT` from Dune CD version 3.7 (copyrighted; obtain separately)
-
-Verify the executable checksum:
-
-```bash
-# Linux/Mac
-sha256sum DNCDPRG.EXE
-
-# PowerShell
-Get-FileHash DNCDPRG.EXE -Algorithm SHA256
+```text
+dune-remake-custom/
+├── Play Dune.command
+├── build-player.sh
+└── dune/
+    ├── DNCDPRG.EXE
+    └── DUNE.DAT
 ```
 
----
+Launch with:
 
-## Build and Run
-
-### Build
-
-```bash
-git clone https://github.com/OpenRakis/Cryogenic
-cd Cryogenic/src
-dotnet build
+```sh
+./Play\ Dune.command
 ```
 
-### Run (no audio)
+For later launches, you can double-click **Play Dune.command** in Finder. You can also keep the game data elsewhere: open **Settings → Choose game data folder**, select the folder containing both files, and choose **Save settings**.
 
-Place `DUNE.DAT` and `DNCDPRG.EXE` in the same directory, then:
+### 4. Start your journey
 
-```bash
-cd Cryogenic/src
-dotnet run --Exe /path/to/DNCDPRG.EXE --UseCodeOverride true -p 4096
+Choose **New game** to start directly at the Atreides palace, or **Load game** to continue a save. **Play intro** runs the original introduction and then returns to the menu.
+
+Open **Settings** to choose the text mode or game speed, then choose **Save settings**. Open **Settings → Game mods**, select the mods you want, and choose **Save mods** before starting or resuming play. All three mods are **off by default**.
+
+## Controls and saves
+
+The game keeps its original mouse controls. During play:
+
+| Action | Shortcut |
+| --- | --- |
+| Open the save browser | **F5** |
+| Open the load browser | **F9** |
+| Pause and open the player menu | **F10** |
+
+On a Mac keyboard, you may need **Fn** with the function key. The original game’s Save/Load commands also open the new slot browser. Returning to the player menu pauses the game and its audio; **Resume game** continues the session.
+
+The Mac launcher stores saves, preferences and working copies of the game data in **`.local/user/`**. Back up that folder to keep your progress. Existing `DUNE37S*.SAV` files beside the original game files are imported when the player opens, while the slot browser is empty. If you select their folder in Settings after launch, restart the player to import them. Original files are left intact.
+
+Saves use the original game’s native format. Each overwritten slot retains one `.previous` backup. Mod changes that have already happened in a saved campaign are retained when that campaign is loaded in this fork; the individual behaviours are explained below.
+
+## Optional game mods
+
+Select any combination in **Settings → Game mods → Save mods**. In a paused game, changes apply when you resume.
+
+![The Game mods screen, showing three available options and two grayed-out future options.](docs/images/game-mods.png)
+
+### No Chani kidnapping
+
+The Fremen still fall sick, Chani still offers to help, and she still needs time to cure them. Leave her at the sick sietch as usual. Once treatment finishes, her success vision is sent and the story advances past the kidnapping and rescue chapter. **Chani stays at the cured sietch:** return to her and choose **Come with me**.
+
+The later fortress campaign and final attack keep their normal requirements. The mod also supports an existing save where Chani is already missing after the cure: she returns to the cured sietch, or to the Atreides palace if that sietch has been lost. It does not skip unfinished treatment.
+
+Once that story progress is saved, turning the option off does not restart the kidnapping.
+
+### Full visions reveal the whole map
+
+After Paul successfully drinks the **Water of Life**, all **70 locations** defined by the original game become known: sietches, fortresses, smuggler camps and both palaces. First visions alone do not activate it. Existing saves that have reached the Water of Life are supported.
+
+Locations become visible without being marked as visited or conquered. Ownership, troops and prospecting information are preserved. Close and reopen an already open map to refresh it. Discovered locations stay known in your saves when the option is turned off.
+
+### Continue after the Harkonnen defeat
+
+Enable this before completing the final attack. The original victory conversation and final artwork play, then the closing credits are skipped and Paul returns to the conquered palace entrance with his travelling companions.
+
+**Time, troop orders, spice production, travel and ecology continue.** The palace stays friendly and keeps its rooms and appearance. Returning to its throne room does not replay the ending. The former Emperor’s tribute demands end, and saving and loading remain available.
+
+A saved continued campaign stays playable when the option is later turned off. To see the original ending again, load a save from before victory with the option disabled.
+
+### Planned mods
+
+Two further options appear grayed out in Settings and are **not implemented yet**:
+
+- Late-game **Sardaukar surprise attacks**.
+- **The Emperor’s palace and new territories** to conquer after the Harkonnen defeat.
+
+The current continuation mod uses the existing map; those additional territories and enemies have not been added.
+
+## Windows and Linux builds
+
+These targets use the same player code. The Mac instructions above describe the platform on which this fork has been tested.
+
+**Windows x64**, from PowerShell in the repository folder:
+
+```powershell
+dotnet publish src/Cryogenic/Cryogenic.csproj -c Release -r win-x64 --self-contained true -o .local/app
+$env:CRYOGENIC_PLAYER_HOME = Join-Path (Get-Location) '.local/user'
+.\.local\app\Cryogenic.exe --player
 ```
 
-`--UseCodeOverride true` is required. Without it, no C# overrides execute.
+**Linux x64 or ARM64**, from the repository folder:
 
-### Run with audio
-
-OPL3 music and Sound Blaster PCM:
-
-```bash
-cd Cryogenic/src/Cryogenic
-dotnet publish
-bin/Release/net10.0/publish/Cryogenic --Exe /path/to/DNCDPRG.EXE --Cycles 8000 --UseCodeOverride true -p 4096 -a "ADP330 SBP2227"
+```sh
+./build-player.sh
+CRYOGENIC_PLAYER_HOME="$PWD/.local/user" ./.local/app/Cryogenic --player
 ```
 
----
+On either platform, put `DNCDPRG.EXE` and `DUNE.DAT` in `dune/`, or select their folder in Settings. Setting `CRYOGENIC_PLAYER_HOME` as shown keeps saves and preferences in the repository’s `.local/user/` folder. Without it, launching the executable directly uses the operating system’s application-data folder under `CryogenicPlayer`.
 
-## Screenshots
+## Troubleshooting
 
-<div align="center">
+| Problem | What to check |
+| --- | --- |
+| `dotnet` is not found | Install the **.NET 10 SDK**, then reopen Terminal or PowerShell. |
+| The launcher asks you to build first | Run `./build-player.sh` from the repository folder. |
+| The player cannot find game data | Choose the folder containing both original CD files in Settings. |
+| The executable is rejected | This player requires the CD 3.7 executable; see the checksum in the detailed player guide. |
+| A mod seems inactive | Choose **Save mods**, resume the game, and check its story requirement above. Reopen the map after enabling map reveal. |
+| Function keys control brightness or media | Hold **Fn** while pressing F5, F9 or F10. |
 
-![Orni](doc/cryodune_orni.png)
-*Orni*
+## Development and credits
 
-![Chani dialogue](doc/cryodune_chani.png)
-*Chani dialogue*
+The custom version lives on **`master`**. Its base is upstream tag **`v0.1.9`**, commit **`02af0c6`**. The original Cryogenic Git history is retained. For development, use `origin` for this fork and `upstream` for OpenRakis/Cryogenic.
 
-![Spice shipment screen](doc/cryodune_send_spice.png)
-*Spice shipment screen*
+The menu is built with Avalonia. Cryogenic and Spice86 run the original DOS game alongside C# replacements; this fork adds version-checked hooks in emulated memory for menu integration and the optional mods. Original game data is not modified on disk.
 
-![Harkonnen scene](doc/cryodune_harkonen.png)
-*Harkonnen scene*
+Run the menu, settings and save checks with:
 
-![Dune map](doc/cryodune_map.png)
-*Dune map*
+```sh
+dotnet run --project src/Cryogenic.Player.Checks -c Release
+```
 
-![Worm call](doc/cryodune_worm.png)
-*Calling a worm*
+The <a href="README-PLAYER.md" target="_blank" rel="noopener noreferrer">detailed player and developer guide</a> includes the supported executable checksum, save locations, configuration options and optional native-game integration checks. Those checks exercise the original cure and victory routines, map discovery, save/load colours and continued play using isolated local game data.
 
-</div>
+The <a href="docs/UPSTREAM-README.md" target="_blank" rel="noopener noreferrer">preserved upstream README</a> documents Cryogenic’s original architecture and reverse-engineering work. Further references are in the <a href="docs/player-sources.html" target="_blank" rel="noopener noreferrer">browser-ready source list</a>.
 
----
+Credit to **Kevin Ferrare, Maximilien Noal and the Cryogenic, Spice86 and Spice86.Audio contributors** for the projects this fork builds on. The Mac audio corrections are included as source with their <a href="src/Spice86.Audio/UPSTREAM.txt" target="_blank" rel="noopener noreferrer">upstream references</a> and license notices.
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, coding conventions, and the override implementation workflow.
-
-Contribution areas:
-
-- **Reverse engineering** — analyze assembly, implement C# overrides, register them in `DefineOverrides()`
-- **Documentation** — add XML doc comments, document data structures, explain function behavior
-- **Testing** — run the game, compare behavior against the original, report differences
-- **Code quality** — refactor existing overrides, improve naming, remove duplication
-
----
-
-## Resources
-
-- [Project page](https://openrakis.github.io/Cryogenic/)
-- [GitHub repository](https://github.com/OpenRakis/Cryogenic)
-- [Spice86](https://github.com/OpenRakis/Spice86) — the emulator and reverse-engineering toolkit used by this project
-- [Releases](https://github.com/OpenRakis/Cryogenic/releases)
-- [Dune (1992) on Wikipedia](https://en.wikipedia.org/wiki/Dune_(video_game))
-
----
-
-## License
-
-Apache License 2.0. See [LICENSE](LICENSE).
-
-Copyright 2021–2024 Kevin Ferrare and contributors.
-
-Dune is copyright Cryo Interactive Entertainment. This project is not affiliated with or endorsed by Cryo Interactive Entertainment or any rights holders.
+The Cryogenic source retains its **Apache License 2.0**; see <a href="LICENSE" target="_blank" rel="noopener noreferrer">LICENSE</a> and <a href="NOTICE" target="_blank" rel="noopener noreferrer">NOTICE</a>. Vendored audio components retain their own notices in <a href="src/Spice86.Audio/licenses/" target="_blank" rel="noopener noreferrer">their license folder</a>. Original Dune game data remains the property of its rights holders and must be supplied separately. This fork is not affiliated with or endorsed by the original rights holders.
