@@ -173,9 +173,14 @@ public sealed class PlayerWindow : Window {
     private void ShowSettings() {
         controller.Settings.DialogueTextMode = controller.SettingsStore.Load().DialogueTextMode;
         StackPanel panel = Panel("Settings", "Preferences are remembered for your next visit.");
-        CheckBox balloons = new() { Content = "Show dialogue in subtitle balloons", IsChecked = controller.Settings.SubtitleBalloons };
-        panel.Children.Add(balloons);
-        panel.Children.Add(new TextBlock { Text = "Display dialogue text in the original speech balloons.", Foreground = Brush("#ACA99F"), FontSize = 12, TextWrapping = TextWrapping.Wrap });
+        ScrollViewer settingsPage = Scrollable(panel);
+        panel.Children.Add(new TextBlock { Text = "Subtitles", FontSize = 14 });
+        WrapPanel textOptions = new() { Orientation = Orientation.Horizontal };
+        RadioButton subtitles = new() { Content = "Subtitles", GroupName = "dialogue-text", IsChecked = controller.Settings.DialogueTextMode == 0, Margin = new Thickness(0, 0, 18, 0) };
+        RadioButton balloons = new() { Content = "Balloons", GroupName = "dialogue-text", IsChecked = controller.Settings.DialogueTextMode == 1, Margin = new Thickness(0, 0, 18, 0) };
+        RadioButton noSubtitles = new() { Content = "No subtitles", GroupName = "dialogue-text", IsChecked = controller.Settings.DialogueTextMode == 2 };
+        textOptions.Children.Add(subtitles); textOptions.Children.Add(balloons); textOptions.Children.Add(noSubtitles);
+        panel.Children.Add(textOptions);
         panel.Children.Add(new TextBlock { Text = "Game speed (cycles)", Margin = new Thickness(0, 12, 0, 0) });
         NumericUpDown cycles = new() { Minimum = 500, Maximum = 30000, Increment = 500, Value = controller.Settings.Cycles, FormatString = "0" };
         panel.Children.Add(cycles);
@@ -192,14 +197,38 @@ public sealed class PlayerWindow : Window {
             dataFolder.Text = chosen;
         }));
         panel.Children.Add(dataFolder);
+        panel.Children.Add(Button("Game mods · Planned", () => { ShowGameMods(settingsPage); return Task.CompletedTask; }));
         panel.Children.Add(Button("Save settings", () => {
-            if (controller.Settings.SubtitleBalloons != (balloons.IsChecked == true)) controller.Settings.SubtitleBalloons = balloons.IsChecked == true;
+            controller.Settings.DialogueTextMode = balloons.IsChecked == true ? 1 : noSubtitles.IsChecked == true ? 2 : 0;
             controller.Settings.Cycles = (int)(cycles.Value ?? 5500);
             controller.SettingsStore.Save(controller.Settings);
             ShowMenu(); notice.Text = "Settings saved.";
             return Task.CompletedTask;
         }, primary: true));
         panel.Children.Add(Button("Back", () => { ShowMenu(); return Task.CompletedTask; }));
+    }
+
+    private void ShowGameMods(Control settingsPage) {
+        StackPanel panel = Panel("Game mods", "Planned options. Each switch will become available when its mod is implemented.");
+        Scrollable(panel);
+        foreach (GameModIdea idea in GameModIdeas.All) {
+            StackPanel description = new() { Spacing = 3 };
+            description.Children.Add(new TextBlock { Text = idea.Name, FontSize = 14, FontWeight = FontWeight.Medium, Foreground = Brush("#929994"), TextWrapping = TextWrapping.Wrap });
+            description.Children.Add(new TextBlock { Text = idea.Description, FontSize = 12, Foreground = Brush("#858B89"), TextWrapping = TextWrapping.Wrap });
+            panel.Children.Add(new CheckBox { Content = description, IsChecked = false, IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
+        }
+        panel.Children.Add(Button("Back to settings", () => { page.Content = settingsPage; return Task.CompletedTask; }));
+    }
+
+    private ScrollViewer Scrollable(StackPanel panel) {
+        page.Content = null;
+        ScrollViewer scrolling = new() {
+            Content = panel,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+        };
+        page.Content = scrolling;
+        return scrolling;
     }
 
     private async Task<bool> Confirm(string title, string message, string action) {

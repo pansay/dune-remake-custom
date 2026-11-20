@@ -52,10 +52,13 @@ public sealed class PlayerRuntime {
             Hook(0x0010, () => machine.CpuState.ZeroFlag = true, once: true);
             Hook(0x0013, () => machine.CpuState.ZeroFlag = true, once: true);
             if (options.Mode == "load") {
-                // Reuse the game's own loader, with the selected save staged as slot 1.
-                ushort relative = unchecked((ushort)(0xB3B0 - 0x0027));
-                WriteCode(0x0024, [0xE8, (byte)relative, (byte)(relative >> 8)]);
-                Hook(0x0024, () => {
+                // Initialize the normal world view, including its persistent interface
+                // graphics and palette buffers, before invoking the game's native loader.
+                // Loading at 0024 would skip that setup and leave blank interface panels.
+                Require(0x0034, [0xE8, 0x87, 0xB2]);
+                ushort relative = unchecked((ushort)(0xB3B0 - 0x0037));
+                WriteCode(0x0034, [0xE8, (byte)relative, (byte)(relative >> 8)]);
+                Hook(0x0034, () => {
                     machine.CpuState.CL = 0;
                     // The native loader preserves the current world/book view, rather than
                     // restoring that transient mode from a save. Boot into the world view.
@@ -64,12 +67,6 @@ public sealed class PlayerRuntime {
                     // and start its countdown afresh instead of inheriting boot elapsed time.
                     machine.Memory[dataBase + 0x2788] = 1;
                     machine.Memory.UInt16[dataBase + 0x46DB] = machine.Memory.UInt16[dataBase + 0x146E];
-                }, once: true);
-                // Loading has already rebuilt the scene. Do not run the new-game story
-                // transition at 002C a second time, or it advances time and toggles views.
-                Hook(0x0027, () => {
-                    machine.Memory.UInt16[dataBase + 0x46DB] = machine.Memory.UInt16[dataBase + 0x146E];
-                    machine.CpuState.IP = 0x0037;
                 }, once: true);
             }
         } else {
@@ -80,6 +77,7 @@ public sealed class PlayerRuntime {
             Hook(0x0016, Stop, once: true);
         }
         Hook(0x0037, () => {
+            if (options.Mode == "load") machine.Memory.UInt16[dataBase + 0x46DB] = machine.Memory.UInt16[dataBase + 0x146E];
             gameInitialized = true;
             ApplyTextMode(options.DialogueTextMode);
         }, once: true);
@@ -171,6 +169,7 @@ public sealed class PlayerRuntime {
                             case "save":
                                 if (!machine.PauseHandler.IsPaused || capturedSave == null) throw new InvalidOperationException("Return to gameplay before saving this scene.");
                                 saves.Write(command.Slot, command.Name ?? "", capturedSave);
+                                PlayerDiagnostics.Capture(machine, dataBase, command.Slot);
                                 Publish("paused", "save", message: $"Saved in slot {command.Slot:000}.");
                                 break;
                             case "exit": Stop(); break;

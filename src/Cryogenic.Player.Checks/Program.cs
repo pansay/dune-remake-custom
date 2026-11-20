@@ -17,6 +17,7 @@ void Invalid(Action action, string name) { try { action(); } catch (InvalidDataE
 
 if (args.Length >= 3 && args[0] == "--integration") {
     Environment.SetEnvironmentVariable("CRYOGENIC_ENGINE_HEADLESS", "1");
+    Environment.SetEnvironmentVariable("CRYOGENIC_CAPTURE_FRAMES", "1");
     using PlayerController controller = new(Path.GetFullPath(args[1]));
     controller.Settings.GameDataDirectory = Path.GetFullPath(args[2]);
     controller.SettingsStore.Save(controller.Settings);
@@ -33,6 +34,7 @@ if (args.Length >= 3 && args[0] == "--integration") {
     }
     await controller.Start("new");
     await WaitFor(() => controller.Status?.Ready == true, "New game reaches input loop");
+    await Task.Delay(1500);
     controller.Send("pause", name: "save");
     await WaitFor(() => controller.Paused, "Game pauses for save menu");
     await controller.Save(100, "End-to-end slot 100");
@@ -45,6 +47,7 @@ if (args.Length >= 3 && args[0] == "--integration") {
     await WaitFor(() => controller.Paused, "Game pauses again");
     await controller.Start("load", 100);
     await WaitFor(() => controller.Status?.Ready == true, "Native loader restores slot 100 in a fresh process");
+    await Task.Delay(1500);
     controller.Send("pause", name: "save");
     await WaitFor(() => controller.Paused, "Loaded game can save again");
     await controller.Save(99, "Loaded save round trip");
@@ -52,6 +55,32 @@ if (args.Length >= 3 && args[0] == "--integration") {
     byte[] beforeMap = DuneSaveCodec.Decode(File.ReadAllBytes(controller.Saves.SavePath(100))).Payload;
     byte[] afterMap = DuneSaveCodec.Decode(File.ReadAllBytes(controller.Saves.SavePath(99))).Payload;
     Check(beforeMap.AsSpan(0, DuneSaveCodec.PackedMapLength).SequenceEqual(afterMap.AsSpan(0, DuneSaveCodec.PackedMapLength)), "Native loader restores all packed map flags");
+    string diagnostics = Path.Combine(PlayerPaths.Home, "diagnostics");
+    byte[] Palette(int slot) {
+        using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(diagnostics, $"slot-{slot:D3}.json")));
+        return json.RootElement.GetProperty("palette").GetBytesFromBase64();
+    }
+    Check(Palette(100).SequenceEqual(Palette(99)), "Loading preserves the scene's complete colour palette");
+    using (var beforeFrame = SkiaSharp.SKBitmap.Decode(Path.Combine(diagnostics, "slot-100.png")))
+    using (var loadedFrame = SkiaSharp.SKBitmap.Decode(Path.Combine(diagnostics, "slot-099.png"))) {
+        bool sameInterface = true;
+        // Permanent interface artwork: exclude portraits, text, pointers and animations.
+        for (int y = 154; y < 200; y++) for (int x = 20; x < 80; x++) {
+            if (beforeFrame.GetPixel(x, y) != loadedFrame.GetPixel(x, y)) sameInterface = false;
+        }
+        Check(sameInterface, "Loading restores the original interface artwork and its colours");
+    }
+    int importedSlot = controller.Saves.Read(2) != null ? 2 : 1;
+    var original = DuneSaveCodec.Decode(File.ReadAllBytes(controller.Saves.SavePath(importedSlot)));
+    await controller.Start("load", importedSlot);
+    await WaitFor(() => controller.Status?.Ready == true, "Original imported save reaches gameplay");
+    await Task.Delay(1500);
+    controller.Send("pause", name: "save");
+    await WaitFor(() => controller.Paused, "Original imported save can pause");
+    await controller.Save(98, "Imported save round trip");
+    var importedAgain = DuneSaveCodec.Decode(File.ReadAllBytes(controller.Saves.SavePath(98)));
+    Check(importedAgain.GameTime == original.GameTime, "Original imported save keeps its game time");
+    Check(importedAgain.Payload.AsSpan(0, DuneSaveCodec.PackedMapLength).SequenceEqual(original.Payload.AsSpan(0, DuneSaveCodec.PackedMapLength)), "Original imported save keeps its map flags");
     await controller.Stop();
     Check(!controller.Running, "Engine exits cleanly");
     Check(!controller.SettingsStore.Load().SubtitleBalloons, "Changed text preference survives engine restarts");
@@ -125,8 +154,18 @@ foreach (string label in new[] { "Play intro", "New game", "Load game", "Exit", 
 Render("main-menu");
 Find("Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Dispatcher.UIThread.RunJobs();
-Check(window.GetVisualDescendants().OfType<CheckBox>().Single().IsChecked == true, "Balloon preference is on in the fresh menu");
+Check(window.GetVisualDescendants().OfType<RadioButton>().Single(r => Equals(r.Content, "Balloons")).IsChecked == true, "Balloon preference is on in the fresh menu");
+foreach (string choice in new[] { "Subtitles", "No subtitles", "Balloons" }) {
+    window.GetVisualDescendants().OfType<RadioButton>().Single(r => Equals(r.Content, choice)).IsChecked = true;
+    Find("Save settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    Find("Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    Dispatcher.UIThread.RunJobs();
+    Check(window.GetVisualDescendants().OfType<RadioButton>().Single(r => r.IsChecked == true).Content?.ToString() == choice, "Original subtitle choice persists: " + choice);
+}
 Render("settings");
+Find("Game mods · Planned").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+Render("game-mods");
+Find("Back to settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Find("Back").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Find("Load game").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 Render("load-menu");

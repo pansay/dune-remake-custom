@@ -16,7 +16,19 @@ During the game:
 
 Mac keyboards may require Fn together with a function key. The original game's Save/Load commands also open the new slot browser. Returning to the menu pauses the game and its audio. Resume continues the current session; loading or starting another game replaces that session after confirmation.
 
-Dialogue balloons are enabled by default. Settings remembers the text mode and game speed. Changes to subtitles, balloons, or no text made in the original mixer are also remembered. The default speed is **5500 cycles**. The Mac playback buffer defaults to **120 ms**, with the corrected single CoreAudio playback consumer.
+Dialogue balloons are enabled by default. Settings offers the original **Subtitles**, **Balloons**, and **No subtitles** radio choices and remembers the text mode and game speed. Changes to subtitles, balloons, or no text made in the original mixer are also remembered. The default speed is **5500 cycles**. The Mac playback buffer defaults to **120 ms**, with the corrected single CoreAudio playback consumer.
+
+## Planned game mods
+
+Settings → Game mods lists these ideas as disabled, unchecked options until implemented:
+
+- No Chani kidnapping.
+- Once Paul has full visions, reveal all sietches and fortresses across the whole map.
+- Continue playing after conquering the Harkonnen palace.
+- Sardaukar arrive late in the game through surprise attacks.
+- After the Harkonnen defeat, open new territories to conquer, including a Sardaukar palace with the Emperor.
+
+These are future optional game mods. The current placeholders do not alter gameplay.
 
 ## Original game data and saves
 
@@ -43,7 +55,7 @@ The build produces a self-contained application in `.local/app/`. The checks exe
 dotnet run --project src/Cryogenic.Player.Checks -c Release -- /path/to/original/dune /path/to/captures
 ```
 
-After publishing, the optional end-to-end check launches an isolated headless engine, imports local saves, creates slot 100, pauses and resumes, reloads that save, checks the saved time and map flags, and exits. It needs the original CD data and at least one existing native save in the supplied folder:
+After publishing, the optional end-to-end check launches an isolated headless engine, imports local saves, creates slot 100, pauses and resumes, reloads that save, checks its palette, interface artwork, saved time and map flags, loads an original imported save, and exits. It needs the original CD data and at least one existing native save in the supplied folder:
 
 ```sh
 dotnet run --project src/Cryogenic.Player.Checks -c Release -- --integration .local/app/Cryogenic /path/to/original/dune
@@ -59,7 +71,7 @@ Base: upstream tag `v0.1.9`, commit `02af0c6`. Branch: `feature/game-menu-and-sa
 
 To upload later, create your repository and add its address as `origin`, then push this branch. Preserve the upstream license, notices, and vendored audio license files. Update the repository's description and release notes to identify it as a modified fork.
 
-The native Avalonia menu lives in `src/Cryogenic.Player`. It manages one engine child per player-data directory. The game bridge installs hooks after DOS relocation, checks the expected instruction bytes, and makes changes in emulated RAM only. New-game and load startup keep the original resource and palette initialization while bypassing the movie. Save capture occurs at the central input loop before pausing; it packs the same map and game-state regions as the original save routine. The original mixer commit callback persists text choices without recording temporary cutscene overrides.
+The native Avalonia menu lives in `src/Cryogenic.Player`. It manages one engine child per player-data directory. The game bridge installs hooks after DOS relocation, checks the expected instruction bytes, and makes changes in emulated RAM only. New-game and load startup keep the original resource and palette initialization while bypassing the movie. Loading also finishes the persistent interface setup before restoring the saved world state, so the interface artwork is present when the scene is redrawn. Save capture occurs at the central input loop before pausing; it packs the same map and game-state regions as the original save routine. The original mixer commit callback persists text choices without recording temporary cutscene overrides.
 
 The patched `Spice86.Audio` source is included with its upstream commit and license notices, so the audio fix is reproducible. See `src/Spice86.Audio/UPSTREAM.txt`. The main project keeps semantic analyzers enabled but does not enforce formatting of the inherited disassembly during builds.
 
